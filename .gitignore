@@ -1,0 +1,8 @@
+*.crt
+*.key
+.terraform
+eks_clusters/cluster1/.terraform
+eks_clusters/cluster1/*terraform*
+eks_ckusters/cluster2/.terraform
+eks_clusters/cluster2/*terraform*
+
