@@ -26,7 +26,8 @@ To deploy the infrastructure and run the examples with pre-built images, please
     curl -L https://git.io/get_helm.sh | bash -s -- --version v3.8.2
     ```
 - Install [Terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
-
+- Install [jq](https://jqlang.github.io/jq/download/)
+- Install [gettext](https://www.drupal.org/docs/8/modules/potion/how-to-install-setup-gettext)
 - Additionally, if you want to build your versions of the tools used here, please
 - Install [Go](https://go.dev/doc/install)
 - Install [Docker](https://docs.docker.com/get-docker/)
