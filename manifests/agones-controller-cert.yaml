@@ -1,0 +1,15 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: agones-cert
+  namespace: agones-system
+spec:
+  dnsNames:
+    - agones-controller-service.agones-system.svc.cluster.local
+    - agones-controller-service.agones-system.svc
+  secretName: agones-cert
+  issuerRef:
+    name: selfsigned
+    kind: ClusterIssuer

@@ -1,0 +1,74 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ncat-server
+  name: ncat-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ncat-server
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: ncat-server
+    spec:
+      containers:
+      - image: 463289706393.dkr.ecr.us-east-2.amazonaws.com/agones-openmatch-ncat:latest
+        args:
+        - --chat 
+        - --listen 
+        - -p 
+        - "12345"
+        - -v
+        imagePullPolicy: Always
+        name: ncat
+        ports:
+        - name: ncat
+          containerPort: 12345
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "1"
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 50Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        securityContext:                 
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ncat-server
+  namespace: default
+  labels:
+    app: ncat-server
+spec:
+  selector:
+    app: ncat-server
+  type: ClusterIP
+  ports:
+  - name: "ncat"
+    protocol: TCP
+    port: 12345
+    targetPort: 12345 
+

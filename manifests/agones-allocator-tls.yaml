@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: allocator-tls
+  namespace: agones-system
+spec:
+  commonName: agones-allocator
+  dnsNames:
+    - ${EXTERNAL_IP}
+    - agones-allocator.agones-system.svc.cluster.local
+  secretName: allocator-tls
+  issuerRef:
+    name: selfsigned
+    kind: ClusterIssuer

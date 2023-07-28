@@ -1,0 +1,45 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
+
+apiVersion: "agones.dev/v1"
+kind: Fleet
+metadata:
+  name: ncat-pool4
+spec:
+  replicas: 2
+  strategy:
+   type: Recreate
+  template:
+    metadata:
+      labels:
+        pool: FOUR
+        region: ${AWS_REGION}
+    spec:
+      players:
+        # set this GameServer's initial player capacity to 10
+        # initialCapacity: 10
+      ports:
+      - name: default
+        protocol: TCP
+        containerPort: 12345
+      health:
+       initialDelaySeconds: 30
+       periodSeconds: 60
+      template:
+        spec:
+          containers:
+          - name: ncat
+            args:
+            - -p
+            - "12345"
+            image: ${REGISTRY}/agones-openmatch-ncat-server
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "20m"
+              limits:
+                memory: "64Mi"
+                cpu: "20m"
+            securityContext:                 
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true

@@ -1,0 +1,10 @@
+go 1.19
+
+use (
+	./integration/clients/allocation-client
+	./integration/clients/ncat
+	./integration/clients/stk
+	./integration/director
+	./integration/matchfunction
+	./integration/ncat-server
+)

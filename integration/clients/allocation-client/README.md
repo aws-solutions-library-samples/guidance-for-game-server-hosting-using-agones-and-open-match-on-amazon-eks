@@ -1,0 +1,3 @@
+# Allocation module
+
+This module implements  the communication of our game client with the Open Match Frontend service. It creates a ticket, submits a ticket request, wait until the ticket assignement is returned by the Frontend, and returns the connection string to its caller. It is used by the ncat sample client to connect to the ncat-server ([../ncat/](../ncat/)), and by the golang wrapper program used to integrate the SuperTuxKart client with Open Match functions ([../stk/](../stk/)). Please, refer to these folders and the page [Open Match - Game Frontend](https://open-match.dev/site/docs/guides/matchmaker/frontend/) for more information.

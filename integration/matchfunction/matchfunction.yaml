@@ -1,0 +1,93 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: agones-openmatch-mmf
+  name: agones-openmatch-mmf
+  namespace: agones-openmatch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agones-openmatch-mmf
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: agones-openmatch-mmf
+    spec:
+      containers:
+      - args:
+        - /app/matchfunction
+        - -queryServiceAddr
+        - $(OPENMATCH_QUERY_SERVICE_ADDR)
+        - -queryServicePort
+        - $(OPENMATCH_QUERY_SERVICE_PORT)
+        - -serverPort
+        - $(OPENMATCH_MATCH_FUNCTION_PORT)
+        - -players
+        - $(NUM_PLAYERS)
+        env:
+        - name: OPENMATCH_MATCH_FUNCTION_PORT
+          value: "50502"
+        - name: OPENMATCH_QUERY_SERVICE_ADDR
+          value: open-match-query.open-match.svc.cluster.local
+        - name: OPENMATCH_QUERY_SERVICE_PORT
+          value: "50503"
+        - name: NUM_PLAYERS
+          value: "4"
+        image: ${REGISTRY}/agones-openmatch-mmf:latest
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+        name: mmf
+        ports:
+        - name: grpc
+          containerPort: 50502
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "1"
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 50Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /app/openmatch-tls
+          name: openmatch-tls-volume
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - secret:
+          defaultMode: 420
+          secretName: open-match-tls-certmanager
+        name: openmatch-tls-volume
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: agones-openmatch-mmf
+  namespace: agones-openmatch
+  labels:
+    app: agones-openmatch-mmf
+spec:
+  selector:
+    app: agones-openmatch-mmf
+  type: ClusterIP
+  ports:
+  - name: grpc
+    protocol: TCP
+    port: 50502
+

@@ -1,0 +1,42 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
+
+apiVersion: "agones.dev/v1"
+kind: Fleet
+metadata:
+  name: supertuxkart-pool2
+spec:
+  replicas: 2
+  strategy:
+   type: Recreate
+  template:
+    metadata:
+      labels:
+        mode: MAJOR_MODE_GRAND_PRIX
+        minorGameMode: MINOR_MODE_TIME_TRIAL
+        region: ${AWS_REGION}
+    spec:
+      players:
+        # set this GameServer's initial player capacity to 10
+        initialCapacity: 10
+      ports:
+      - name: default
+        containerPort: 8080
+      health:
+       initialDelaySeconds: 30
+       periodSeconds: 60
+      template:
+        spec:
+          containers:
+          - name: supertuxkart
+            image: gcr.io/agones-images/supertuxkart-example:0.4
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "20m"
+              limits:
+                memory: "64Mi"
+                cpu: "20m"
+            securityContext:                 
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true

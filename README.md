@@ -21,8 +21,6 @@ While the commands and scripts here were tested on `bash` and `zsh` shells, they
 To deploy the infrastructure and run the examples with pre-built images, please
 - Install [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
 - Install [eksctl](https://docs.aws.amazon.com/eks/latest/userguide/eksctl.html)
-- Install [jq](https://jqlang.github.io/jq/download/)
-- Install [gettext](https://formulae.brew.sh/formula/gettext)
 - Install [Helm](https://helm.sh/docs/intro/install/)
     ```bash
     curl -L https://git.io/get_helm.sh | bash -s -- --version v3.8.2

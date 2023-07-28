@@ -1,0 +1,30 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  annotations:
+  name: open-match-tls-certmanager
+  namespace: open-match
+spec:
+  commonName: open-match
+  dnsNames:
+  - open-match-backend
+  - open-match-backend.open-match.svc.cluster.local
+  - om-demo
+  - om-demoevaluator
+  - open-match-evaluator
+  - om-demofunction
+  - om-e2eevaluator
+  - om-e2ematchfunction
+  - open-match-frontend
+  - open-match-query
+  - open-match-query.open-match.svc.cluster.local
+  - open-match-swaggerui
+  - open-match-synchronizer
+  - agones-openmatch-mmf.agones-openmatch.svc.cluster.local
+  issuerRef:
+    kind: ClusterIssuer
+    name: selfsigned
+  secretName: open-match-tls-certmanager
