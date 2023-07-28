@@ -6,7 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="6f0edd55-b8c8-4559-ae7e-aa1f174db6c9" name="Changes" comment="adjusting readme">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/eks_clusters/cluster2/main.tf" beforeDir="false" afterPath="$PROJECT_DIR$/eks_clusters/cluster2/main.tf" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -87,7 +87,7 @@
       <workItem from="1690481428944" duration="1765000" />
       <workItem from="1690556735736" duration="5442000" />
       <workItem from="1690577907069" duration="476000" />
-      <workItem from="1690578494143" duration="750000" />
+      <workItem from="1690578494143" duration="1368000" />
     </task>
     <servers />
   </component>

@@ -299,7 +299,7 @@ resource "null_resource" "generate_agones_certs" {
 
   provisioner "local-exec" {
     when = create
-    command    = "nohup ${path.module}/generate-agones-certs.sh ${local.name} ${local.cluster_region}&"
+    command    = "nohup ../../scripts/generate-agones-certs.sh ${local.name} ${local.cluster_region}&"
   }
 
   depends_on = [
@@ -320,7 +320,7 @@ resource "null_resource" "agones_tls_configuration" {
 
   provisioner "local-exec" {
     when = create
-    command    = "nohup ${path.module}/configure-agones-tls.sh ${local.name} ${local.cluster_region} &"
+    command    = "nohup ../../scripts/configure-agones-tls.sh ${local.name} ${local.cluster_region} &"
   }
 
   depends_on = [
@@ -339,7 +339,7 @@ resource "null_resource" "open_match_ingress_configuration" {
 
   provisioner "local-exec" {
     when = create
-    command    = "nohup ${path.module}/configure-open-match-ingress.sh ${local.name} ${local.cluster_region} &"
+    command    = "nohup ../../scripts/configure-open-match-ingress.sh ${local.name} ${local.cluster_region} &"
   }
 
   depends_on = [
