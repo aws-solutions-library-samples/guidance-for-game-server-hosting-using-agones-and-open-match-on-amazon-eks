@@ -35,22 +35,33 @@ To deploy the infrastructure and run the examples with pre-built images, please
 ## Create two EKS clusters to host containerized game servers
 
 ### Use Terraform to bootstrap the clusters and deploy the required components
+Create private S3 buckets to store the remote states for the infrastructure
 
-Run the following commands to create a primary EKS cluster in us-east-1 and build a secondary cluster in us-east-2 for multi-cluster allocation. Additionaly, we configure the certificates that will be used to communicate with Agones.
+```bash
+SEED=$(openssl rand -hex 4)
+TF_BUCKET1="agones-gameservers-1-${SEED}"
+aws s3api create-bucket --bucket ${TF_BUCKET1}  --acl private
+SEED=$(openssl rand -hex 4)
+TF_BUCKET2="agones-gameservers-2-${SEED}"
+aws s3api create-bucket --bucket ${TF_BUCKET2} --acl private --region us-east-2 --create-bucket-configuration LocationConstraint=us-east-2
+```
+Run the following commands to create a primary EKS cluster in us-east-1 and build a secondary cluster in us-east-2 for multi-cluster allocation. Additionally, we configure the certificates that will be used to communicate with Agones.
 ```bash
 # Create the first cluster
-terraform -chdir=eks_clusters/cluster1 init
+touch eks_clusters/cluster1/terraform.tfstate
+terraform -chdir=eks_clusters/cluster1 init -backend-config="bucket=${TF_BUCKET1}" -backend-config="region=us-east-1" -backend-config="key=terraform.tfstate"
 terraform -chdir=eks_clusters/cluster1 apply -auto-approve -var="cluster_name=agones-gameservers-1" -var="cluster_region=us-east-1"
 
 # Create the second cluster
-terraform -chdir=eks_clusters/cluster2 init
+touch eks_clusters/cluster2/terraform.tfstate
+terraform -chdir=eks_clusters/cluster2 init -backend-config="bucket=${TF_BUCKET2}" -backend-config="region=us-east-2" -backend-config="key=terraform.tfstate"
 terraform -chdir=eks_clusters/cluster2 apply -auto-approve -var="cluster_name=agones-gameservers-2" -var="cluster_region=us-east-2" -var="ecr_region=us-east-1"
 
 # Configure the TLS certificates for Agones
 sh scripts/test-agones-tls.sh  agones-gameservers-1 us-east-1
 sh scripts/test-agones-tls.sh  agones-gameservers-2 us-east-2
 ```
-Note that you can customize the cluster_name and regions using the variables passed to the EKS cluster. 
+Note that you can customize the cluster_name and regions using the variables passed to the EKS cluster.
 
 Each cluster is maintained with its own terraform state file. The infrastructure definition for each cluster can be updated separately. Operators can reconfigure each of the clusters without impacting the entire solution. 
 
