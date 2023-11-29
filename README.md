@@ -1,417 +1,283 @@
 # Guidance for Game Server Hosting on Amazon EKS with Agones and Open Match
 
 
-[[_TOC_]]
+- [Introduction](#introduction)
+    * [High Level Architecture](#high-level-architecture)
+    * [Repository Organization](#repository-organization)
+    * [Cluster bootstrapping](#cluster-bootstrapping)
+    * [Open Match  - Agones integration](#open-match---agones-integration)
+- [Pre-requisites](#pre-requisites)
+- [Create the clusters and deploy the required components](#create-the-clusters-and-deploy-the-required-components)
+- [Build and deploy the game server fleets](#build-and-deploy-the-game-server-fleets)
+- [Integrate Open Match with Agones](#integrate-open-match-with-agones)
+    * [Deploy Match Function and Director on the first cluster](#deploy-match-making-function-and-director-on-the-first-cluster)
+    * [Test the ncat server](#test-the-ncat-server)
+    * [Test with SuperTuxKart](#test-with-supertuxkart)
+- [Clean Up Resources](#clean-up-resources)
+- [Security recommendations](#security-recommendations)
 
-## Objectives
+## Introduction
 
-The goal is to build a modular end-to-end solution that implements all the required components for open source, Kubernetes based game server hosting for a session-based multiplayer game. This includes the whole flow from the game client (Unity, Unreal or C++) authenticated against a backend, all the way to game servers running in multiple locations globally.
+This guidance provides code and instructions to create a multi Kubernetes cluster environment to host a match making and game server solution, integrating [Open Match](https://open-match.dev/site/), [Agones](https://agones.dev/site/) and [Amazon Elastic Kubernetes Service (Amazon EKS)](https://aws.amazon.com/eks/?nc1=h_ls), for a session-based multiplayer game. 
 
-The purpose of the solution is to address the common customer requirement of having an open source based fully configurable solution that can fully run on your local system and can be deployed across location within and outside of AWS.
+This README aims to provide a succint installation guide for the integration. For more technical information about the deployment process, customization, and troubleshooting, please see the [Details](./DETAILS.md) page.
+### High Level Architecture
+![High Level Architecture](./agones-openmatch-multicluster.final.png)
 
-
-## Disclaimer
-- *We are currently at the development stage of the project and the steps described below are experimental. Please do not use them for production workloads.*
-- The steps below have been tested with EKS 1.22/1.23 and cert-manager 1.8.0/1.11.0
-
-## Pre-requisites
-This document assumes the user already has access to an AWS account and has the [AWS command line interface](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed and configured to access the account using their credentials. 
-While the commands and scripts here were tested on `bash` and `zsh` shells, they can be run with some modifications in other shells, like `Windows PowerShell`.
-
-To deploy the infrastructure and run the examples with pre-built images, please
-- Install [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
-- Install [eksctl](https://docs.aws.amazon.com/eks/latest/userguide/eksctl.html)
-- Install [Helm](https://helm.sh/docs/intro/install/)
-    ```bash
-    curl -L https://git.io/get_helm.sh | bash -s -- --version v3.8.2
-    ```
-- Install [Terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
-- Install [jq](https://jqlang.github.io/jq/download/)
-- Install [gettext](https://www.drupal.org/docs/8/modules/potion/how-to-install-setup-gettext)
-- Additionally, if you want to build your versions of the tools used here, please
-- Install [Go](https://go.dev/doc/install)
-- Install [Docker](https://docs.docker.com/get-docker/)
-
-## Create two EKS clusters to host containerized game servers
-
-### Use Terraform to bootstrap the clusters and deploy the required components
-Create private S3 buckets to store the remote states for the infrastructure
-
+### Repository organization
 ```bash
-SEED=$(openssl rand -hex 4)
-TF_BUCKET1="agones-gameservers-1-${SEED}"
-aws s3api create-bucket --bucket ${TF_BUCKET1}  --acl private
-SEED=$(openssl rand -hex 4)
-TF_BUCKET2="agones-gameservers-2-${SEED}"
-aws s3api create-bucket --bucket ${TF_BUCKET2} --acl private --region us-east-2 --create-bucket-configuration LocationConstraint=us-east-2
+.
+├── README.md   # This file
+├── DETAILS.md  # Extra documentation
+├── integration # Golang code and Dockerfiles for Open Match - Agones integration
+│   ├── clients 
+│   │   ├── allocation-client
+│   │   ├── ncat
+│   │   └── stk
+│   ├── director 
+│   ├── matchfunction
+│   └── ncat-server
+├── manifests   # Kubernetes YAML manifests
+│   └── fleets
+│       ├── ncat
+│       └── stk
+├── scripts     # Shell scripts
+└── terraform   # Terraform code
+    ├── cluster
+    ├── extra-cluster
+    └── intra-cluster
+        └── helm_values
 ```
-Run the following commands to create a primary EKS cluster in us-east-1 and build a secondary cluster in us-east-2 for multi-cluster allocation. Additionally, we configure the certificates that will be used to communicate with Agones.
-```bash
-# Create the first cluster
-touch eks_clusters/cluster1/terraform.tfstate
-terraform -chdir=eks_clusters/cluster1 init -backend-config="bucket=${TF_BUCKET1}" -backend-config="region=us-east-1" -backend-config="key=terraform.tfstate"
-terraform -chdir=eks_clusters/cluster1 apply -auto-approve -var="cluster_name=agones-gameservers-1" -var="cluster_region=us-east-1"
+### Cluster bootstrapping
 
-# Create the second cluster
-touch eks_clusters/cluster2/terraform.tfstate
-terraform -chdir=eks_clusters/cluster2 init -backend-config="bucket=${TF_BUCKET2}" -backend-config="region=us-east-2" -backend-config="key=terraform.tfstate"
-terraform -chdir=eks_clusters/cluster2 apply -auto-approve -var="cluster_name=agones-gameservers-2" -var="cluster_region=us-east-2" -var="ecr_region=us-east-1"
+The Terraform scripts create the clusters using  [Amazon EKS Blueprints for Terraform](https://aws-ia.github.io/terraform-aws-eks-blueprints). Agones and Open Match are deployed when the clusters are bootstrapped.
 
-# Configure the TLS certificates for Agones
-sh scripts/test-agones-tls.sh  agones-gameservers-1 us-east-1
-sh scripts/test-agones-tls.sh  agones-gameservers-2 us-east-2
-```
-Note that you can customize the cluster_name and regions using the variables passed to the EKS cluster.
-
-Each cluster is maintained with its own terraform state file. The infrastructure definition for each cluster can be updated separately. Operators can reconfigure each of the clusters without impacting the entire solution. 
-
-
-### About the clusters bootstrapping
-
-The Terraform script creates a cluster using the [Amazon EKS Blueprints for Terraform](https://aws-ia.github.io/terraform-aws-eks-blueprints). Agones and Open Match are deployed when the clusters are bootstrapped.
-
-Certificates CA and key files required for TLS communications are generated by [certmanager](https://cert-manager.io). Certmanager is enabled in the Terraform definition as an add-on of the EKS blueprints.
+Certificates CA and key files required for TLS communictions are generated by [cert-manager](https://cert-manager.io), enabled in the Terraform definition as an add-on of the EKS blueprints.
 
 The EKS Blueprints enables metrics and logging for the EKS clusters. Metrics are exported to CloudWatch to provide observability on the clusters. 
 
-### Current state diagram
-At the end of each section, we will show a diagram highlighting what we have built so far. At this moment we don't have much, just the initial clusters on their regions.
+Terraform also deploys resources out of the clusters needed by the integration, such as inter-region VPC Peering, Global Accelerator and Elastic Container Registry (ECR) repositories.
 
-![Current state diagram](./agones-openmatch-multicluster.1.png)
+### Open Match  - Agones integration
 
-### Test the Agones deployment
-To test if cert-manager and Agones are correctly deployed and configured, and if we can reach the [Agones Allocator Service](https://agones.dev/site/docs/advanced/allocator-service/), run this:
+Golang code provides integration between Open Match and Agones, creating 
+- a *Match Making Function* based on the latency from the client to the server endpoint
+- a *Director* that handles the game server allocation between Agones *Allocator* and the game clients. 
+
+Dockerfile and Kubernetes manifests enable container building and deploying.
+
+
+## Pre-requisites
+This guidance assumes the user already has access to an AWS account and has the [AWS command line interface](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed and configured to access the account using their credentials. 
+While the commands and scripts here were tested on `bash` and `zsh` shells, they can be run with some modifications in other shells, like `Windows PowerShell` or `fish`.
+
+To deploy the infrastructure and run the examples, you need:
+- [Terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
+- [Helm](https://helm.sh/docs/intro/install/)
+- [jq](https://jqlang.github.io/jq/download/)
+- [gettext](https://www.drupal.org/docs/8/modules/potion/how-to-install-setup-gettext)
+- [Go](https://go.dev/doc/install)
+- [Docker](https://docs.docker.com/get-docker/)
+- [OpenSSL](https://www.openssl.org/source/)
+
+## Create the clusters and deploy the required components
+
+For our example, we will be creating two EKS clusters in different regions. The first one will run our Open Match matchmaking service and the central Agones allocator, with a group of game servers for this region. The second cluster will run another Agones instance, responsible for the game servers on that region.
+We will run terraform in three steps, following the `terraform` folder:
+
+1. terraform/cluster: Creates the EKS clusters and VPCs in both regions.
+2. terraform/intra-cluster: Deploys several components inside both clusters, using `helm` charts and `kubernetes` manifests.
+3. terraform/extra-cluster: Creates additional AWS resources outside the cluster, like ECR repositories, VPC peering and Global Accelerator infrastructures.
+
+### Prepare terraform environment variables and Backend
+Define the names of your clusters and two different regions to run them. You can customize the clusters names, regions and VPC CIDR using the variables passed to the Terraform stack. In our examples we will be using `agones-gameservers-1` and `10.1.0.0/16` on region `us-east-1`, and `agones-gameservers-2` with `10.2.0.0/16` region `us-east-2`. Note that the CIDR of the VPCs should not overlap, since we will use VPC Peering to connect them.
+```bash
+CLUSTER1=agones-gameservers-1
+REGION1=us-east-1
+CIDR1="10.1.0.0/16"
+CLUSTER2=agones-gameservers-2
+REGION2=us-east-2
+CIDR2="10.2.0.0/16"
+VERSION="1.28"
+```
+
+We will be using the S3 Terraform backend, so we will need to create a S3 bucket to store the Terraform states and a DynamoDB table to handle the Terraform execution lock. In our example, we use the same region defined by the `REGION1` environment variable above.
+
+Create a private S3 bucket to store the remote states for the infrastructure.
 
 ```bash
-sh scripts/test-agones-tls.sh agones-gameservers-1 us-east-1
-sh scripts/test-agones-tls.sh agones-gameservers-2 us-east-2
-```
-This code executes commands against the clusters to get the address of the Agones Allocator. It executes the `curl` command to call the service using the certificate, key and CA files created during the deployment of Agones. 
+SEED=$(openssl rand -hex 4)
+TF_BUCKET="agones-gameservers-${SEED}"
+aws s3api create-bucket --bucket ${TF_BUCKET}  --acl private --region ${REGION1} $( (( ${REGION1} != "us-east-1" )) && printf %s '--create-bucket-configuration LocationConstraint='${REGION1} )
 
-You should see a message like this for each cluster:
 ```
-Updated context "arn:aws:eks:us-east-1:xxxxxxxxxxxxxx:cluster/agones-gameservers-1 in <local user path>/.kube/config".
-{"code":8, "message":"there is no available GameServer to allocate", "details":[]}
-```
-This is the Agones Allocator answering that it can't allocate any game server. That's the expected behavior, since we didn't deploy any game server yet.
-If you run this test shortly after deploying the EKS cluster, you may receive one or two messages like:
+
+Note: We create the bucket in the same region as the first cluster, and we check if the region is `us-east-1`, as in our example, to avoid an `InvalidLocationConstraint` error using `LocationConstraint=us-east-1`.
+
+Create DynamoDB table, in the same region, to hold the state locks.
 ```bash
-curl: (6) Could not resolve host: xxxxxxxxxxxxxxx-yyyyyyyyy.us-east-x.elb.amazonaws.com
+aws dynamodb create-table --region ${REGION1} --table-name agones-gameservers-tf-lock   --attribute-definitions AttributeName=LockID,AttributeType=S    --key-schema AttributeName=LockID,KeyType=HASH   --provisioned-throughput ReadCapacityUnits=1,WriteCapacityUnits=1
 ```
-That's because the DNS propagation has not reached your DNS servers. Wait one or two minutes before executing the command again.
+### terraform/cluster
 
-If you receive a different message, add ` --verbose` to the end of the `curl` command and examine the output.
+Run the following commands to create EKS clusters, with the names and regions configured in the previous steps.
+```bash
+# Initialize Terraform, using the S3 backend
+terraform -chdir=terraform/cluster init \
+ -backend-config="bucket=${TF_BUCKET}" \
+ -backend-config="region=${REGION1}" \
+ -backend-config="dynamodb_table=agones-gameservers-tf-lock" &&
 
-### Current state diagram
-![Current state diagram](./agones-openmatch-multicluster.2.png)
+# Create both clusters
+terraform -chdir=terraform/cluster apply -auto-approve \
+ -var="cluster_1_name=${CLUSTER1}" \
+ -var="cluster_1_region=${REGION1}" \
+ -var="cluster_1_cidr=${CIDR1}" \
+ -var="cluster_2_name=${CLUSTER2}" \
+ -var="cluster_2_region=${REGION2}" \
+ -var="cluster_2_cidr=${CIDR2}" \
+ -var="cluster_version=${VERSION}"
+```
 
-Now our main components (Agones, Open Match) are deployed. Cert-manager was configured to provide TLS certificates. We tested TLS communications and confirmed we can send requests to the allocator service using TLS. 
 
-Note: since we will be focusing on the game allocation and matchmaking aspects of this repository, we will omit cert-manager kubernetes deployments from the next diagrams. We will focus on the relevant kubernetes objects only (for example, the agones-system namespace also has `controller` and `ping` pods, not shown here).
+### terraform/intra-cluster
+The commands below will deploy our resources inside the clusters created in the last step. We use the output values from `terraform/cluster` as input to the `terraform/intra-cluster` module.
+```bash
+# Initialize Terraform, using the S3 backend
+terraform -chdir=terraform/intra-cluster init \
+ -backend-config="bucket=${TF_BUCKET}" \
+ -backend-config="region=${REGION1}" \
+ -backend-config="dynamodb_table=agones-gameservers-tf-lock" &&
+# Deploy to the first cluster
+terraform -chdir=terraform/intra-cluster workspace select -or-create=true ${REGION1} &&
+terraform -chdir=terraform/intra-cluster apply -auto-approve \
+ -var="cluster_name=${CLUSTER1}" \
+ -var="cluster_region=${REGION1}" \
+ -var="cluster_endpoint=$(terraform -chdir=terraform/cluster output -raw cluster_1_endpoint)" \
+ -var="cluster_certificate_authority_data=$(terraform -chdir=terraform/cluster output -raw cluster_1_certificate_authority_data)" \
+ -var="cluster_token=$(terraform -chdir=terraform/cluster output -raw cluster_1_token)" \
+ -var="cluster_version=${VERSION}" \
+ -var="oidc_provider_arn=$(terraform -chdir=terraform/cluster output -raw oidc_provider_1_arn)" \
+ -var="namespaces=[\"agones-openmatch\", \"agones-system\", \"gameservers\", \"open-match\"]" \
+ -var="configure_agones=true" \
+ -var="configure_open_match=true" &&
+# Deploy to the second cluster
+terraform -chdir=terraform/intra-cluster workspace select -or-create=true ${REGION2} &&
+terraform -chdir=terraform/intra-cluster apply -auto-approve \
+ -var="cluster_name=${CLUSTER2}" \
+ -var="cluster_region=${REGION2}" \
+ -var="cluster_endpoint=$(terraform -chdir=terraform/cluster output -raw cluster_2_endpoint)" \
+ -var="cluster_certificate_authority_data=$(terraform -chdir=terraform/cluster output -raw cluster_2_certificate_authority_data)" \
+ -var="cluster_token=$(terraform -chdir=terraform/cluster output -raw cluster_2_token)" \
+ -var="cluster_version=${VERSION}" \
+ -var="oidc_provider_arn=$(terraform -chdir=terraform/cluster output -raw oidc_provider_2_arn)" \
+ -var="namespaces=[\"agones-system\", \"gameservers\"]" \
+ -var="configure_agones=true" \
+ -var="configure_open_match=false" 
+```
 
-## Build, deploy and test the game server fleets
+### terraform/extra-cluster
+Here we deploy the external components to our infrastructure, and configure resources that need both clusters to deploy, such as VPC Peering and Agones multi-cluster allocation.
+```bash
+# Initialize Terraform, using the S3 backend
+terraform -chdir=terraform/extra-cluster init \
+ -backend-config="bucket=${TF_BUCKET}" \
+ -backend-config="region=${REGION1}" \
+ -backend-config="dynamodb_table=agones-gameservers-tf-lock" &&
+
+# Get the values needed by Terraform
+VPC1=$(terraform -chdir=terraform/cluster output -raw vpc_1_id) &&
+SUBNETS1=$(terraform -chdir=terraform/cluster output gameservers_1_subnets) &&
+ROUTE1=$(terraform -chdir=terraform/cluster output -raw private_route_table_1_id) &&
+ENDPOINT1=$(terraform -chdir=terraform/cluster output -raw cluster_2_endpoint) &&
+AUTH1=$(terraform -chdir=terraform/cluster output -raw cluster_1_certificate_authority_data) &&
+TOKEN1=$(terraform -chdir=terraform/cluster output -raw cluster_1_token) &&
+VPC2=$(terraform -chdir=terraform/cluster output -raw vpc_2_id) &&
+SUBNETS2=$(terraform -chdir=terraform/cluster output gameservers_2_subnets) &&
+ROUTE2=$(terraform -chdir=terraform/cluster output -raw private_route_table_2_id) &&
+ENDPOINT2=$(terraform -chdir=terraform/cluster output -raw cluster_2_endpoint) &&
+AUTH2=$(terraform -chdir=terraform/cluster output -raw cluster_2_certificate_authority_data) &&
+TOKEN2=$(terraform -chdir=terraform/cluster output -raw cluster_2_token) &&
+# Create resources  
+terraform -chdir=terraform/extra-cluster apply -auto-approve \
+ -var="requester_cidr=${CIDR1}" \
+ -var="requester_vpc_id=${VPC1}" \
+ -var="requester_route=${ROUTE1}" \
+ -var="cluster_1_gameservers_subnets=${SUBNETS1}" \
+ -var="cluster_1_endpoint=${ENDPOINT1}" \
+ -var="cluster_1_certificate_authority_data=${AUTH1}" \
+ -var="cluster_1_token=${TOKEN1}" \
+ -var="accepter_cidr=${CIDR2}" \
+ -var="accepter_vpc_id=${VPC2}" \
+ -var="accepter_route=${ROUTE2}" \
+ -var="cluster_2_gameservers_subnets=${SUBNETS2}" \
+ -var="cluster_2_endpoint=${ENDPOINT2}" \
+ -var="cluster_2_certificate_authority_data=${AUTH2}" \
+ -var="cluster_2_token=${TOKEN2}"
+
+```
+After several minutes, Terraform should end with a mesage similar to this:
+```bash
+Apply complete! Resources: XX added, YY changed, ZZ destroyed.
+
+Outputs:
+global_accelerator_address = "abcdefgh123456789.awsglobalaccelerator.com"
+```
+
+Please, save the `global_accelerator_address` value, as we will use it later to connect to our game servers. In case you need to retrieve it, you can run `terraform -chdir=terraform/extra-cluster output`. 
+
+
+## Build and deploy the game server fleets
 
 We added two game servers to test the Agones and Open Match deployments: 
 - ncat-server: a lightweight client-server chatroom we developed using [Ncat](https://nmap.org/ncat/) together with a Golang client to illustrate the Open Match integration.
 - [SuperTuxKart](https://supertuxkart.net/Main_Page): a 3D open-source kart racing game developed in C/C++. Since we didn't change the client's code to integrate Open Match functionality, we use a Golang wrapper with the code from the ncat example.
 
-You can deploy either server to the clusters to test the Agones operation. Later, we will use these deployments to test the Open Match matchmaking. For simplicity, we will use the ncat deployment in our examples.
+We will use the ncat-server deployment to test the Open Match matchmaking. 
 
-The commands below build the image, push it to your ECR repository, and use it to deploy 4 fleets of ncat game servers on each cluster. It uses the value of each `AWS_REGION` where the cluster is located to tag the fleets, which we will use later when allocating game servers depending on the region they are located:
+Use the command below to build the image, push it to the ECR repository, and deploy 4 fleets of ncat game servers on each cluster. 
 
 ```bash
 sh scripts/deploy-test-fleets.sh agones-gameservers-1 us-east-1 agones-gameservers-2 us-east-2
 ```
-> **About the ncat and supertuxkart fleet files:** These files deploy the [Agones Fleet](https://agones.dev/site/docs/reference/fleet/) CRDs. A `Fleet` is a set of warm `GameServers` that are available to be allocated from. You can inspect the content of the files on the folders [./fleets/ncat](./fleets/ncat) and [./fleets/stk](./fleets/stk).
 
-#### Testing
-In addition to the `kubectl get fleets` and `kubectl get gameservers` commands to verify the status of the fleets and game servers, we can test the Allocator Service with `curl`, in a way similar to what we did after the deployment of the clusters.  
-Let's run the updated test code below:
-
-```bash
-# We will be testing the allocation to the servers on the gameservers namespace
-sh  scripts/test-gameserver-allocation.sh agones-gameservers-1 us-east-1
-sh  scripts/test-gameserver-allocation.sh agones-gameservers-2 us-east-2
-```
-You should see a similar result for each cluster:
-```bash
-Updated context "arn:aws:eks:us-east-1:xxxxxxxxxxxxxx:cluster/agones-gameservers-1 in <local user path>/.kube/config".
-- Allocating server -
-{"gameServerName":"ncat-pool2-zr5xn-nc9cz","ports":[{"name":"default","port":7256}],"address":"ec2-3-84-182-165.compute-1.amazonaws.com","nodeName":"ip-192-168-7-36.ec2.internal"}
-
-- Display game servers -
-NAME                     STATE       ADDRESS                                    PORT   NODE                           AGE     LABELS
-ncat-pool2-zr5xn-nc9cz   Allocated   ec2-3-84-182-165.compute-1.amazonaws.com   7256   ip-192-168-7-36.ec2.internal   2m9s    agones.dev/fleet=ncat-pool2,agones.dev/gameserverset=ncat-pool2-zr5xn,pool=TWO,region=us-east-1
-... Removed unallocated servers ...
-
-Switched to context "xxxxxxxxxxxxxxxx@agones-gameservers-2.us-east-2.eksctl.io".
-- Allocating server -
-{"gameServerName":"ncat-pool3-qwgcq-p8ntr","ports":[{"name":"default","port":7403}],"address":"ec2-3-143-205-47.us-east-2.compute.amazonaws.com","nodeName":"ip-192-168-37-221.us-east-2.compute.internal"}
-
-- Display game servers -
-NAME                     STATE       ADDRESS                                            PORT   NODE                                           AGE    LABELS
-ncat-pool3-qwgcq-p8ntr   Allocated   ec2-3-143-205-47.us-east-2.compute.amazonaws.com   7403   ip-192-168-37-221.us-east-2.compute.internal   115s   agones.dev/fleet=ncat-pool3,agones.dev/gameserverset=ncat-pool3-qwgcq,pool=THREE,region=us-east-2
-... Removed unallocated servers ...
-```
-Observe that the server address returned by the `curl` command is the same that appears as `Allocated` on the `kubectl get gameservers` output.
-
-### Current state diagram
-![Current state diagram](./agones-openmatch-multicluster.3.png)
-
-With the game servers deployed, we put the allocator to work, answering our allocation requests with the IP of the allocated server on the same cluster, and marking it as `Allocated`.
-
-## Setup and test multi-cluster allocation
-In the previous test, we did a local allocation request to each cluster, and received a game server allocated in the same cluster. [Multi-cluster Allocation](https://agones.dev/site/docs/advanced/multi-cluster-allocation/) enables Agones to allocate game servers in other Agones clusters. To request a multi-cluster allocation, we simply add `"multiClusterSetting":{"enabled":true}` to the `curl --data` payload of the test we already used, as in the code below. Please, try it:
-```bash
-sh scripts/test-gameserver-multicluster-allocation.sh agones-gameservers-1 us-east-1
-```
-It seems we are not ready yet, Agones does not like it and complains two times with.
-```bash
-{"error":"no multi-cluster allocation policy is specified","code":2,"message":"no multi-cluster allocation policy is specified"}
-```
-So, let's configure the multi-cluster policy. We will do this on the `agones-gameservers-1`, since it will be our "home" or "router" cluster, that will accept allocations to itself and to `agones-gameservers-2`.
-
-1. Store the addresses of the Agones allocators for both clusters. We will need this in our policies:
-
-```bash
-export CLUSTER1=agones-gameservers-1
-export CLUSTER2=agones-gameservers-2
-export ALLOCATOR_IP_CLUSTER1=$(sh scripts/set-allocator-ip.sh ${CLUSTER1} us-east-1)
-export ALLOCATOR_IP_CLUSTER2=$(sh scripts/set-allocator-ip.sh ${CLUSTER2} us-east-2)
-```
-
-2. Switch the kubernetes context to `agones-gameservers-1`:
-```bash
-export CLUSTER_NAME="agones-gameservers-1"
-export AWS_REGION="us-east-1"
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
-```
-
-3. Creating the multi-cluster policies
-
-To enable Agones multi-cluster configuration, we use the [GameServerAllocationPolicy](https://agones.dev/site/docs/reference/agones_crd_api_reference/#multicluster.agones.dev/v1.GameServerAllocationPolicy). We need to define a policy for each cluster used to allocate game servers, including the local cluster.
-First, let's take a look at the multi-cluster configuration files:
-
-***multicluster-allocation-1.yaml***
-```yaml
-# Configures local multi-cluster allocation on agones-gameservers-1
-apiVersion: multicluster.agones.dev/v1
-kind: GameServerAllocationPolicy
-metadata:
-  name: allocator-policy-to-local-cluster
-  namespace: agones-system
-spec:
-  connectionInfo:
-    clusterName: "agones-gameservers-1"
-    namespace: gameservers
-  priority: 1
-  weight: 100
-```
-***multicluster-allocation-1-to-2.yaml***
-```yaml
-# Configures remote multi-cluster allocation from agones-gameservers-1 to agones-gameservers-2
-apiVersion: multicluster.agones.dev/v1
-kind: GameServerAllocationPolicy
-metadata:
-  name: allocator-policy-to-cluster-2
-  namespace: agones-system
-spec:
-  connectionInfo:
-    allocationEndpoints:
-    - ${ALLOCATOR_IP_CLUSTER_2}
-    clusterName: "agones-gameservers-2"
-    namespace: gameservers
-    secretName: allocator-secret-to-cluster-2 
-  priority: 1
-  weight: 100
-```
-Notes:
-- The policy for the local cluster doesn't have a `spec.connectionInfo.allocationEndpoints` field. 
-- On the remote cluster file, we will use `envsubst` to import the value of the variables `${ALLOCATOR_IP_CLUSTER_2}`, to the `spec.connectionInfo.allocationEndpoints`.
-- `spec.connectionInfo.namespace` contains the namespace where the game servers are running in the target clusters. The Namespace specified in the allocation request (like in the `curl` tests) is used to refer to the namespace that the GameServerAllocationPolicy itself is located in, `agones-system` in our case.
-- `spec.connectionInfo.secretName` points to a secret that holds the cert, key and ca of the **target** cluster. We will create this secret in the next step.
-- Game servers will be allocated from clusters with the lowest priority number. If there are no available game servers available in clusters with the lowest priority number, they will be allocated from clusters with the next lowest priority number. 
-- For clusters with the same priority, the cluster is chosen with a probability relative to its weight.
-
-To create the policies, run:
-```bash
-kubectl apply -f multicluster-allocation-1.yaml
-envsubst < multicluster-allocation-1-to-2.yaml | kubectl apply -f -
-```
-
-4. Establish a certificate trust between both clusters
-To accept allocation requests from other clusters, Agones' allocator for cluster `agones-gameservers-2` should accept the client’s certificate from cluster `agones-gameservers-1` and the cluster `agones-gameservers-1`’s client should be configured to accept the server TLS certificate, if it is not signed by a public Certificate Authority (CA). You can read more about this process on the [Establish trust](https://agones.dev/site/docs/advanced/multi-cluster-allocation/#establish-trust) section of the Multi-cluster Allocation documentation.
-
-To configure `agones-gameservers-1` trust certs, run:
-```bash
-kubectl create secret generic \
---from-file=tls.crt=client_agones-gameservers-2.crt \
---from-file=tls.key=client_agones-gameservers-2.key \
---from-file=ca.crt=ca_agones-gameservers-2.crt \
-allocator-secret-to-cluster-2 -n agones-system
-```
-This will create the secret `allocator-secret-to-cluster-2` in the `agones-system` namespace:
-```yaml
-apiVersion: v1
-data:
-  ca.crt:  <REDACTED>
-  tls.crt: <REDACTED>
-  tls.key: <REDACTED>
-kind: Secret
-metadata:
-  name: allocator-secret-to-cluster-2
-  namespace: agones-system
-type: Opaque
-```
-
-5. Test multi-cluster allocation from cluster 1 to cluster 2
-
-First, let's delete all game servers on both clusters, so we remove the already allocated game servers, and have a clearer output on our test. Agones fleets will recreate the deleted game servers and leave all on Ready state:
-```bash                                                    
-for context in $(kubectl config get-contexts -o=name | grep agones-gameservers);
-do
-    kubectl config use-context $context
-    kubectl delete --all gs -n gameservers
-done
-```
-
-Now, we can test the policies with the updated code below:
-```bash
-sh scripts/test-gameserver-multicluster-allocation.sh agones-gameservers-1 us-east-1
-sh scripts/test-gameserver-multicluster-allocation.sh agones-gameservers-2 us-east-2
-```
-And we receive an output similar to this for each cluster:
-```bash
-Switched to context "xxxxxxxx@agones-gameservers-1.us-east-1.eksctl.io".
-- Allocating server -
-{"gameServerName":"ncat-pool3-qwgcq-mtwf7","ports":[{"name":"default","port":7334}],"address":"ec2-3-143-205-47.us-east-2.compute.amazonaws.com","nodeName":"ip-192-168-37-221.us-east-2.compute.internal"}
-- Display ALLOCATED game servers only -
-
-Switched to context "xxxxxxxx@agones-gameservers-2.us-east-2.eksctl.io".
-- Allocating server -
-{"error":"no multi-cluster allocation policy is specified","code":2,"message":"no multi-cluster allocation policy is specified"}
-- Display ALLOCATED game servers only -
-ncat-pool3-qwgcq-mtwf7   Allocated   ec2-3-143-205-47.us-east-2.compute.amazonaws.com   7334   ip-192-168-37-221.us-east-2.compute.internal   14s
-```
-Please observe the sequence on the example above:
-- The script switches to the first cluster
-- Request the allocation to the first cluster endpoint, that is successful and show one allocated game server
-- List the allocated game servers on the first cluster, showing none 
-- The script Switches to the second cluster
-- Request the allocation to the second cluster endpoint, that will fail because we didn't configure multi-cluster allocation and trust on the second cluster yet
-- List the allocated game servers on the first cluster, showing one server
-
-Your output may show the game server allocated to the first cluster, because we are using the same `priority` and `weight` on our allocation policies, you have 50% chance of the game server being allocated on each cluster. Please, repeat the tests a few more times, you should see game servers being randomly allocated to each cluster.
-
-### Current state diagram
-![Current state diagram](./agones-openmatch-multicluster.4.png)
 
 ## Integrate Open Match with Agones
-The image below shows the typical configuration of Open Match.
-![Open Match diagram](https://open-match.dev/site/images/architecture.png)*Open Match diagram from [Matchmaking using Open Match](https://open-match.dev/site/docs/guides/matchmaker/)*
+This repository contains code and documentation for the customized versions of Open Match `director` and `matchfunction` on the folders [./integration/director/](./integration/director/) and [./integration/matchfunction/](./integration/matchfunction/), as well as the client tools we used in the folder [./integration/clients/](./integration/clients/). 
 
-The core Open Match Services are deployed to the `open-match` namespace. We will add customizations and external services to the cluster to integrate Open Match and Agones. Both components will communicate to handle whole matchmaking and game server allocation.
+### Deploy Match Making Function and Director on the first cluster 
 
-For simplicity, we bypass the `Game Frontend`, that could handle tasks like user authentication, leaderboards, and chat. We use a `Game Client` that connects directly to Open Match's `Frontend`. We deploy customized versions of the `Match Function` and the `Director` that are using the latency between the client and the game server to match players. Players with similar latencies are matched and the Agones allocator allocates a gameserver in the region with the lower latency.
-
-![Open Match - Agones flow](./agones-openmatch-flow.png)*Open Match - Agones matchmaking and game server allocation flow*
-
-The diagram above shows our matchmaking and allocation process:
-1. The client request a game session
-2. Open Match processes the request from multiple clients, matching them based on their latencies to the game servers regions, and asks Agones for a game server allocation
-3. Agones allocates a game server on the cluster closest to the clients and returns its address to Open Match (remote clusters not shown on the diagram)
-4. The client receives the game server address from Open Match and initiates a game session with the server 
-
-In the diagram, the blue arrows show the standard Open Match flow, explained on [Matchmaking using Open Match](https://open-match.dev/site/docs/guides/matchmaker/). Our integration explained on this current section shows the tasks needed to enable the red arrow between Open Match Director and Agones Allocator.
-
-
-### Deploying Director and Match Function on cluster 1
-This repository contains code and documentation for the customized versions of Open Match `director` and `matchfunction` on the folders [./integration/director/](./integration/director/) and [./integration/matchfunction/](./integration/matchfunction/), as well as the client tools we used in the folder [./integration/clients/](./integration/clients/). Please, refer to the documentation on each folder for more details about them.
-
-We will deploy and test the customizations to the cluster 1.
-
-1. Switch the kubernetes context to `agones-gameservers-1`
+1. Switch the kubernetes context to `$CLUSTER1``
 ```bash
-export CLUSTER_NAME="agones-gameservers-1"
-export AWS_REGION="us-east-1"
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
+kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
 ```
 
-2. Deploy the Open Match matchmaking function
-
+2. Build and deploy the Open Match matchmaking function
 ```bash
-sh scripts/deploy-matchfunction.sh agones-gameservers-1 us-east-1
+sh scripts/deploy-matchfunction.sh ${CLUSTER1} ${REGION1}
 ```
 
-3. Deploy the Open Match Director
-
+3. Build and deploy the Open Match Director
 ```bash
-sh scripts/deploy-director.sh agones-gameservers-1 us-east-1
+sh scripts/deploy-director.sh ${CLUSTER1} ${REGION1}
 ```
 
 4. Verify that the mmf and director pods are running
 ```bash
 kubectl get pods -n agones-openmatch
 ```
-5. Check the logs
 
-**director**
+### Test the ncat server
+Here we test the flow of the Open Match - Agones integration. We use the ncat fleet deployment and the contents of the folder [integration/ncat/client](integration/ncat/client). You will need to open several terminal windows to run this test. 
 
+Here we'll use the value of `global_accelerator_address` from the Terraform deployment. Get the TLS cert of the Frontend and run the player client:
 ```bash
-kubectl logs -n agones-openmatch  -l app=agones-openmatch-director
-```
-```bash
-...
-YYYY/MM/DD hh:mm:ss Generated 0 matches for profile profile_double_arg:"latency-us-east-2" max:25
-YYYY/MM/DD hh:mm:ss Generated 0 matches for profile profile_double_arg:"latency-us-west-2" max:100 min:75
-YYYY/MM/DD hh:mm:ss Generated 0 matches for profile profile_double_arg:"latency-us-east-2" max:50 min:25
-YYYY/MM/DD hh:mm:ss Generated 0 matches for profile profile_double_arg:"latency-us-east-1" max:50 min:25
-YYYY/MM/DD hh:mm:ss Generated 0 matches for profile profile_double_arg:"latency-us-west-1" max:25
-...
-```
-**mmf**
-```bash
-kubectl logs -n agones-openmatch -l app=agones-openmatch-mmf
-```
-```bash
-...
-YYYY/MM/DD hh:mm:ss Generating proposals for function profile_double_arg:"latency-us-west-2" max:100 min:75
-YYYY/MM/DD hh:mm:ss Generating proposals for function profile_double_arg:"latency-us-east-1" max:25
-YYYY/MM/DD hh:mm:ss Generating proposals for function profile_double_arg:"latency-us-west-1" max:100 min:75
-YYYY/MM/DD hh:mm:ss Generating proposals for function profile_double_arg:"latency-us-west-2" max:50 min:25
-YYYY/MM/DD hh:mm:ss Generating proposals for function profile_double_arg:"latency-us-east-1" max:25
-...
-```
-In our example, `director` polls the `backend` service each 5 seconds, trying to fetch matches from it, and sends the match profiles to the `matchmaking function`. You can see more details about `FetchMatches` and `MatchProfile` on the [Director page at Open Match site](https://open-match.dev/site/docs/guides/matchmaker/director/).  The logs on the `mmf` pod are from connections made by the `director`, if the latter gets undeployed or scaled to 0, `mmf` will stop logging.
-
-
-### Accessing the ncat server
-Here we test the flow of the Open Match - Agones integration. We use the ncat fleet deployment and the contents of the folder [integration/ncat/client](integration/ncat/client). You will need to open several terminal windows to run this test. You can find a demo of this test in the [Visuals](#visuals) section.
-
-1. Ensure that the ncat game servers are running, and you have at least one game server in the `Ready` state in one of our clusters (since `director` already has the multi-cluster allocation configured, even if we request a game server to Open Match running on cluster 1, Agones will still allocate a game server on either cluster).
-
-```bash
-for context in $(kubectl config get-contexts -o=name | grep agones-gameservers); 
-do 
-    kubectl config use-context $context
-    CLUSTER_NAME=$(kubectl config view --minify -o jsonpath='{.clusters[].name}' | cut -f1 -d.)
-    echo "- Display READY game servers on cluster ${CLUSTER_NAME} -"
-    kubectl get gameservers --namespace ${GAMESERVER_NAMESPACE} | grep Ready
-    echo
-done
-```
-
-2. Get cluster 1 Frontend Load Balancer address, the TLS cert and run the player client
-```bash
-export CLUSTER_NAME="agones-gameservers-1"
-export AWS_REGION="us-east-1"
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
-FRONTEND=$(kubectl get svc -n open-match open-match-frontend-loadbalancer -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 cd integration/clients/ncat
 kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > public.cert
 kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.private\.key}" | base64 -d > private.key
 kubectl get secret open-match-tls-rootca -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > publicCA.cert
-go run main.go -frontend $FRONTEND:50504  -latencyUsEast1 10 -latencyUsEast2 30
+go run main.go -frontend <global_accelerator_address>:50504  -latencyUsEast1 10 -latencyUsEast2 30
 ```
 ```bash
 YYYY/MM/DD hh:mm:ss Connecting to Open Match Frontend
@@ -419,7 +285,7 @@ YYYY/MM/DD hh:mm:ss Ticket ID: cdfu6mqgqm6kj18qr880
 YYYY/MM/DD hh:mm:ss Waiting for ticket assignment
 ```
 
-3. In three other terminal windows, repeat the steps above. You should have a similar output to the sample below, showing the connection to the Frontend server, the game server assigned to the client and the connection to the game server:
+3. In three other terminal windows, go to the `integration/clients/ncat` directory and type the `go run main.go -frontend <global_accelerator_address>:50504  -latencyUsEast1 10 -latencyUsEast2 30` command. You should have a similar output to the sample below, showing the connection to the Frontend server, the game server assigned to the client and the connection to the game server:
 ```bash
 YYYY/MM/DD hh:mm:ss Connecting to Open Match Frontend
 YYYY/MM/DD hh:mm:ss Ticket ID: cdfu6mqgqm6kj18qr880
@@ -485,191 +351,95 @@ ncat-pool1-m72zl-52mzz   Ready            ec2-52-87-246-98.compute-1.amazonaws.c
 ```
 10. You can repeat the process with different values to the `-latencyUsEast1` and `-latencyUsEast2` flags when calling the client, to verify how it affects the game server allocation.
 
-### Testing with SuperTuxKart
+### Test with SuperTuxKart
 We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in [integration/clients/stk/](integration/clients/stk/) to test the SuperTuxKart integration with Open Match and Agones, similarly to our ncat example above. You will have to deploy the fleets changing the value `export GAMESERVER_TYPE=ncat` to `export GAMESERVER_TYPE=stk` (remove any `ncat` fleets before, with the command `kubectl delete fleets -n gameservers --all`), and follow the instructions in the [integration/clients/stk/](integration/clients/stk/) folder. Be aware that we will need to run 4 instances of the SuperTuxKart client (like we did with our terminal clients in the ncat example), so it can be a bit demanding to your computer resources.
 
-### Current state diagram
-![Current state diagram](./agones-openmatch-multicluster.6.png)
-
-The whole flow of matchmaking and allocation is ready now. Our game clients can access our Frontend Load Balancer, request a game, be matched with opponents with similar latencies and access their game servers.
-## Adding AWS Global Accelerator to the solution
-[AWS Global Accelerator](https://aws.amazon.com/global-accelerator/) is a networking service that helps you improve the availability, performance, and security of your public applications. Global Accelerator provides two global static public IPs that act as a fixed entry point to your application endpoints, such as Application Load Balancers, Network Load Balancers, Amazon Elastic Compute Cloud (EC2) instances, and elastic IPs.
-Now, we will add Global Accelerator to our game system. It will sit in front of the Frontend Load Balancer, providing two global static public IPs to our solution.
-To provision Global accelerator, run the following command:
-```bash
-export CLUSTER_NAME_1="agones-gameservers-1"
-export AWS_REGION_1="us-east-1"
-# Global Accelerator is a global service that supports endpoints in multiple Amazon Web Services Regions
-# but you must specify the US West (Oregon) Region to create, update, or otherwise work with accelerators.
-# That is, for example, specify --region us-west-2 on AWS CLI commands.
-# (https://awscli.amazonaws.com/v2/documentation/api/latest/reference/globalaccelerator/index.html)
-export AWS_REGION="us-west-2"
-AWS_ACCOUNT=$(aws sts get-caller-identity --query "Account" --output text)
-
-echo "- Fetching cluster 1 Load Balancer address -"
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME_1})
-FRONTEND_1=$(kubectl get svc -n open-match open-match-frontend-loadbalancer -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-echo "- Create accelerator -"
-GLOBAL_ACCELERATOR_ARN=$(aws globalaccelerator create-accelerator \
-  --name agones-openmatch \
-  --query "Accelerator.AcceleratorArn" \
-  --output text)
-echo "- Create listeners -"
-GLOBAL_ACCELERATOR_LISTERNER_ARN=$(aws globalaccelerator create-listener \
-  --accelerator-arn $GLOBAL_ACCELERATOR_ARN \
-  --region $AWS_REGION \
-  --protocol TCP \
-  --port-ranges FromPort=50504,ToPort=50504 \
-  --query "Listener.ListenerArn" \
-  --output text)
-echo "- Wait until Load Balancer is active -"
-aws elbv2 wait load-balancer-available \
-  --load-balancer-arns $(aws elbv2 describe-load-balancers \
-    --region $AWS_REGION_1 \
-    --query "LoadBalancers[?contains(DNSName, '$FRONTEND_1')].LoadBalancerArn" \
-    --output text) \
-  --region $AWS_REGION_1
-  --region $AWS_REGION_2
-echo "- Create endpoints -"
-ENDPOINTGROUPARN_1=$(aws globalaccelerator create-endpoint-group \
-  --region $AWS_REGION \
-  --listener-arn $GLOBAL_ACCELERATOR_LISTERNER_ARN \
-  --endpoint-group-region $AWS_REGION_1 \
-  --query "EndpointGroup.EndpointGroupArn" \
-  --output text \
-  --endpoint-configurations EndpointId=$(aws elbv2 describe-load-balancers \
-    --region $AWS_REGION_1 \
-    --query "LoadBalancers[?contains(DNSName, '$FRONTEND_1')].LoadBalancerArn" \
-    --output text),Weight=128)
-echo "Global Accelerator address: $GLOBAL_ACCELERATOR_ADDR"
-```
-Now, we can use our client to connect to the Global Accelerator address:
-
-```bash
-go run main.go -frontend $GLOBAL_ACCELERATOR_ADDR:50504  -latencyUsEast1 10 -latencyUsEast2 30
-```
-
-### Final state diagram
-![Final state diagram](./agones-openmatch-multicluster.final.png)
 
 ## Clean Up Resources
 
-1. Delete the Global Accelerator
-```bash
-GLOBAL_ACCELERATOR_ARN=$(aws globalaccelerator list-accelerators --region=us-west-2 --query "Accelerators[?contains(Name, 'agones-openmatch')].AcceleratorArn" --output text)
-GLOBAL_ACCELERATOR_LISTENER=$(aws globalaccelerator list-listeners  --accelerator-arn $GLOBAL_ACCELERATOR_ARN --region=us-west-2 --query "Listeners[].ListenerArn"  --output text)
-for i in $(aws globalaccelerator list-endpoint-groups --listener-arn  $GLOBAL_ACCELERATOR_LISTENER --region=us-west-2 --query "EndpointGroups[].EndpointGroupArn" --output text)
-do
-  aws globalaccelerator delete-endpoint-group --endpoint-group-arn $i --region=us-west-2
-done
-aws globalaccelerator delete-listener --listener-arn $GLOBAL_ACCELERATOR_LISTENER  --region=us-west-2
-# Global Accelerator need to be disabled to be deleted
-aws globalaccelerator update-accelerator --no-enabled  --accelerator-arn $GLOBAL_ACCELERATOR_ARN  --region=us-west-2
-# Wait until the disable operation is complete, then delete the accelerator
-until aws globalaccelerator list-accelerators --region=us-west-2 --query "Accelerators[?contains(Name, 'agones-openmatch')].Status" --output text | grep -m 1 "DEPLOYED"; do sleep 1 ; done
-aws globalaccelerator delete-accelerator  --accelerator-arn $GLOBAL_ACCELERATOR_ARN --region=us-west-2
 
-``` 
+- Destroy the extra clusters components
+    ```bash
+    terraform -chdir=terraform/extra-cluster destroy -auto-approve \
+     -var="requester_cidr=${CIDR1}" \
+     -var="requester_vpc_id=${VPC1}" \
+     -var="requester_route=${ROUTE1}" \
+     -var="cluster_1_gameservers_subnets=${SUBNETS1}" \
+     -var="cluster_1_endpoint=${ENDPOINT1}" \
+     -var="cluster_1_certificate_authority_data=${AUTH1}" \
+     -var="cluster_1_token=${TOKEN1}" \
+     -var="accepter_cidr=${CIDR2}" \
+     -var="accepter_vpc_id=${VPC2}" \
+     -var="accepter_route=${ROUTE2}" \
+     -var="cluster_2_gameservers_subnets=${SUBNETS2}" \
+     -var="cluster_2_endpoint=${ENDPOINT2}" \
+     -var="cluster_2_certificate_authority_data=${AUTH2}" \
+     -var="cluster_2_token=${TOKEN2}" 
+    ``` 
 
-3. Destroy the clusters
-```bash
-terraform -chdir=eks_clusters/cluster1 destroy -auto-approve -var="cluster_name=agones-gameservers-1" -var="cluster_region=us-east-1"
-terraform -chdir=eks_clusters/cluster2 destroy -auto-approve -var="cluster_name=agones-gameservers-2" -var="cluster_region=us-east-2"
-``` 
+- Delete the Load Balancers
+    ```bash
+    aws elbv2 delete-load-balancer --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION1} --region ${REGION1} --query "LoadBalancers[?contains(LoadBalancerName,'openmatch-frontend')].LoadBalancerArn"  --output text)
+    aws elbv2 delete-load-balancer --region ${REGION1} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION1} --query "LoadBalancers[?contains(LoadBalancerName,'agones-gameservers-1-allocator')].LoadBalancerArn"  --output text)
+    aws elbv2 delete-load-balancer --region ${REGION2} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION2} --query "LoadBalancers[?contains(LoadBalancerName,'agones-gameservers-2-allocator')].LoadBalancerArn"  --output text)
+
+    ```
+
+- Discard or destroy the internal cluster components
+    If you are removing all the components of the solution, it's quicker to simply discard the Terraform state of the intra-cluster folder, since we will destroy the clusters in the next step, and this will automatically remove the intra-cluster components. 
+    ```bash
+    terraform -chdir=terraform/intra-cluster workspace select ${REGION1}
+    terraform -chdir=terraform/intra-cluster state list | cut -f 1 -d '[' | xargs -L 0 terraform -chdir=terraform/intra-cluster state rm
+    terraform -chdir=terraform/intra-cluster workspace select ${REGION2}
+    terraform -chdir=terraform/intra-cluster state list | cut -f 1 -d '[' | xargs -L 0 terraform -chdir=terraform/intra-cluster state rm
+    ``` 
+    If you prefer to destroy the components in this stage (for example, to keep the clusters created by terraform/cluster and test terraform-intra clusters with other values and configurations), use the code below instead.
+
+    ```bash
+
+    # Destroy the resources inside the first cluster
+    terraform -chdir=terraform/intra-cluster workspace select ${REGION1}
+    terraform -chdir=terraform/intra-cluster destroy -auto-approve \
+    -var="cluster_name=${CLUSTER1}" \
+    -var="cluster_region=${REGION1}" \
+    -var="cluster_endpoint=$(terraform -chdir=terraform/cluster output -raw cluster_1_endpoint)" \
+    -var="cluster_certificate_authority_data=$(terraform -chdir=terraform/cluster output -raw cluster_1_certificate_authority_data)" \
+    -var="cluster_token=$(terraform -chdir=terraform/cluster output -raw cluster_1_token)" \
+    -var="cluster_version=${VERSION}" \
+    -var="oidc_provider_arn=$(terraform -chdir=terraform/cluster output -raw oidc_provider_1_arn)" \
+    -var="namespaces=[\"agones-openmatch\", \"agones-system\", \"gameservers\", \"open-match\"]" \
+    -var="configure_agones=true" \
+    -var="configure_open_match=true"
+
+    # Destroy the resources inside the second cluster
+    terraform -chdir=terraform/cluster workspace select ${REGION2}
+    terraform -chdir=terraform/intra-cluster workspace select ${REGION2}
+    terraform -chdir=terraform/intra-cluster destroy -auto-approve \
+    -var="cluster_name=${CLUSTER2}" \
+    -var="cluster_region=${REGION2}" \
+    -var="cluster_endpoint=$(terraform -chdir=terraform/cluster output -raw cluster_2_endpoint)" \
+    -var="cluster_certificate_authority_data=$(terraform -chdir=terraform/cluster output -raw cluster_2_certificate_authority_data)" \
+    -var="cluster_token=$(terraform -chdir=terraform/cluster output -raw cluster_2_token)" \
+    -var="cluster_version=${VERSION}" \
+    -var="oidc_provider_arn=$(terraform -chdir=terraform/cluster output -raw oidc_provider_2_arn)" \
+    -var="namespaces=[\"agones-system\", \"gameservers\"]" \
+    -var="configure_agones=true" \
+    -var="configure_open_match=false" 
+    ``` 
+- Destroy the clusters
+    ```bash
+
+    # Destroy both clusters
+    terraform -chdir=terraform/cluster destroy -auto-approve \
+    -var="cluster_1_name=${CLUSTER1}" \
+    -var="cluster_1_region=${REGION1}" \
+    -var="cluster_1_cidr=${CIDR1}" \
+    -var="cluster_2_name=${CLUSTER2}" \
+    -var="cluster_2_region=${REGION2}" \
+    -var="cluster_2_cidr=${CIDR2}" \
+    -var="cluster_version=${VERSION}"
+    ``` 
 
 
 # Security recommendations
 [This page](./security.md) provides suggestions of actions that should be taken to make the solution more secure acording to AWS best practices.
-=======
-# project-respawn
-
-A solution that leverages open source technologies such as Agones to host multiplayer games end-to-end.
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.aws.dev/agts-run/project-respawn.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://gitlab.aws.dev/agts-run/project-respawn/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!).  Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.

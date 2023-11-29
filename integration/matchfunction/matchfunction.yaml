@@ -7,7 +7,6 @@ metadata:
   labels:
     app: agones-openmatch-mmf
   name: agones-openmatch-mmf
-  namespace: agones-openmatch
 spec:
   replicas: 1
   selector:
@@ -79,7 +78,6 @@ kind: Service
 apiVersion: v1
 metadata:
   name: agones-openmatch-mmf
-  namespace: agones-openmatch
   labels:
     app: agones-openmatch-mmf
 spec:

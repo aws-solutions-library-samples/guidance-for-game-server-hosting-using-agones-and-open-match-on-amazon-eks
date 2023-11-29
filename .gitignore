@@ -1,8 +1,10 @@
 *.crt
-*.crt
+*.cert
 *.key
 tempfile.json
 terraform-aws-eks-blueprints/
 eks_clusters/.DS_Store
 .idea
-
+.DS_Store
+.terraform*
+go.work*

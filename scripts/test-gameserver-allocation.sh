@@ -1,9 +1,11 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
 # set -o xtrace
 echo "#####"
 NAMESPACE=gameservers
-aws eks update-kubeconfig --name $1 --region $2
 CLUSTER_NAME=$1
 AWS_REGION=$2
+kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
 KEY_FILE=client_${CLUSTER_NAME}.key
 CERT_FILE=client_${CLUSTER_NAME}.crt
 TLS_CA_FILE=ca_${CLUSTER_NAME}.crt

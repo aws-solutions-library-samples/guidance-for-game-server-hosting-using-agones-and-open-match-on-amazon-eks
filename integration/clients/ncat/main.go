@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"sync"
@@ -23,7 +22,6 @@ const (
 
 var wg sync.WaitGroup
 
-// Reads from the socket and outputs to the console.
 func Read(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	for {
@@ -37,7 +35,6 @@ func Read(conn net.Conn) {
 	}
 }
 
-// Reads from Stdin, and outputs to the socket.
 func Write(conn net.Conn) {
 	reader := bufio.NewReader(os.Stdin)
 	writer := bufio.NewWriter(conn)
@@ -65,7 +62,7 @@ func ConnectGameServer(server string) {
 
 	wg.Add(1)
 
-	log.Printf("Connecting to ncat server")
+	fmt.Printf("Connecting to ncat server")
 	conn, err := net.Dial(CONN_TYPE, server)
 	if err != nil {
 		fmt.Println(err)
@@ -81,14 +78,13 @@ var omFrontendEndpoint string
 var latencyUsEast1, latencyUsEast2 int
 
 func main() {
-
 	flag.StringVar(&omFrontendEndpoint, "frontend", "localhost:50504", "Open Match Frontend Endpoint")
 	flag.IntVar(&latencyUsEast1, "latencyUsEast1", 100, "Latency to region us-east-1")
 	flag.IntVar(&latencyUsEast2, "latencyUsEast2", 100, "Latency to region us-east-2")
 	flag.Usage = func() {
 		fmt.Printf("Usage: \n")
 		fmt.Printf("player -frontend FrontendAddress:Port -latencyUsEast1 int -latencyUsEast2 int\n")
-		flag.PrintDefaults() // prints default usage
+		flag.PrintDefaults()
 	}
 	flag.Parse()
 	serverPort := allocation.GetServerAssignment(omFrontendEndpoint, latencyUsEast1, latencyUsEast2)

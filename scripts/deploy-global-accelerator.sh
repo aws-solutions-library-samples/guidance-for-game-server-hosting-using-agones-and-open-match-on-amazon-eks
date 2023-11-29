@@ -1,4 +1,6 @@
 
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
 export CLUSTER_NAME_1="agones-gameservers-1"
 export AWS_REGION_1="us-east-1"
 # Global Accelerator is a global service that supports endpoints in multiple Amazon Web Services Regions

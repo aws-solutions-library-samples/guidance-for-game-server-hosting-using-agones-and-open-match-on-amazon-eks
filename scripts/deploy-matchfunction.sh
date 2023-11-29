@@ -1,3 +1,5 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
 export NAMESPACE=agones-openmatch
 export CLUSTER_NAME1=$1
 export AWS_REGION1=$2
@@ -11,7 +13,7 @@ docker build  -t $REGISTRY/agones-openmatch-mmf integration/matchfunction
 echo "- Push image to register -"
 docker push $REGISTRY/agones-openmatch-mmf
 
-aws eks update-kubeconfig --name ${CLUSTER_NAME1} --region ${AWS_REGION1}
+kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME1})
 echo "- Deploy Open Match mmf to cluster ${CLUSTER_NAME1} -"
 envsubst < integration/matchfunction/matchfunction.yaml | kubectl apply --namespace ${NAMESPACE} -f -
 echo

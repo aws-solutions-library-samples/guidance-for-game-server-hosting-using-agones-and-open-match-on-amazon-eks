@@ -7,9 +7,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
+	"os"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -17,29 +17,22 @@ import (
 	"open-match.dev/open-match/pkg/pb"
 )
 
-// MatchFunctionService implements pb.MatchFunctionServer, the server generated
-// by compiling the protobuf, by fulfilling the pb.MatchFunctionServer interface.
 type MatchFunctionService struct {
 	grpc               *grpc.Server
 	queryServiceClient pb.QueryServiceClient
 	port               int
 }
 
-// Start creates and starts the Match Function server and also connects to Open
-// Match's queryService service. This connection is used at runtime to fetch tickets
-// for pools specified in MatchProfile.
 func Start(queryServiceAddr string, serverPort int) {
-	// Connect to QueryService.
-
-	omCert, err := ioutil.ReadFile("./openmatch-tls/tls.crt")
+	omCert, err := os.ReadFile("./openmatch-tls/tls.crt")
 	if err != nil {
 		panic(err)
 	}
-	omKey, err := ioutil.ReadFile("./openmatch-tls/tls.key")
+	omKey, err := os.ReadFile("./openmatch-tls/tls.key")
 	if err != nil {
 		panic(err)
 	}
-	omCacert, err := ioutil.ReadFile("./openmatch-tls/ca.crt")
+	omCacert, err := os.ReadFile("./openmatch-tls/ca.crt")
 	if err != nil {
 		panic(err)
 	}
@@ -48,7 +41,6 @@ func Start(queryServiceAddr string, serverPort int) {
 		panic(err)
 	}
 	conn, err := grpc.Dial(queryServiceAddr, omDialOpts)
-	// conn, err := grpc.Dial(queryServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to Open Match, got %s", err.Error())
 	}
@@ -58,7 +50,6 @@ func Start(queryServiceAddr string, serverPort int) {
 		queryServiceClient: pb.NewQueryServiceClient(conn),
 	}
 
-	// Create and host a new gRPC service on the configured port.
 	creds, err := credentials.NewServerTLSFromFile("./openmatch-tls/tls.crt", "./openmatch-tls/tls.key")
 	if err != nil {
 		log.Fatalf("Failed to setup TLS with local files, error: %s", err)
@@ -78,9 +69,7 @@ func Start(queryServiceAddr string, serverPort int) {
 	}
 }
 
-// creates a grpc client dial option with TLS configuration.
 func createRemoteClusterDialOption(clientCert, clientKey, caCert []byte) (grpc.DialOption, error) {
-	// Load client cert
 	cert, err := tls.X509KeyPair(clientCert, clientKey)
 	if err != nil {
 		return nil, err
@@ -88,10 +77,7 @@ func createRemoteClusterDialOption(clientCert, clientKey, caCert []byte) (grpc.D
 
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}}
 	if len(caCert) != 0 {
-		// Load CA cert, if provided, and trust the server certificate.
-		// This is required for self-signed certs.
 		tlsConfig.RootCAs = x509.NewCertPool()
-		// tlsConfig.ServerName = "open-match-backend"
 		if !tlsConfig.RootCAs.AppendCertsFromPEM(caCert) {
 			return nil, errors.New("only PEM format is accepted for server CA")
 		}

@@ -14,3 +14,5 @@ player -frontend FrontendAddress:Port -latencyUsEast1 int -latencyUsEast2 int -p
   -path string
     	SuperTuxKart binary path (default "supertuxkart")
 ```
+
+Note: this code uses TLS to connect to the Open Match Frontend, it expects the files `public.cert`, `publicCA.cert`, and `private.key` in the same directory. Refer to the main [README.md](../../../README.md#test-the-ncat-server) for instructions on how to create the TLS files.

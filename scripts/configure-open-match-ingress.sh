@@ -1,15 +1,19 @@
-# set -o xtrace
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
+set -o xtrace
 echo "#####"
-aws eks update-kubeconfig --name $1 --region $2
-CLUSTER_NAME=$(kubectl config view --minify -o jsonpath='{.clusters[].name}' | cut -f1 -d.)
+CLUSTER_NAME=$1
+ROOT_PATH=$2
+kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
 kubectl get pods -n open-match -o wide
 # Create Load Balancer
-kubectl expose deployment open-match-frontend  -n open-match  --type=LoadBalancer  --name=open-match-frontend-loadbalancer
-# Add annotation to create a NLB (to be used with Global Accelerator)
+kubectl expose deployment open-match-frontend  -n open-match  --type=LoadBalancer  --name=open-match-frontend-loadbalancer -oyaml --dry-run=client | sed  's/creationTimestamp: null/annotations:\n    service\.beta\.kubernetes\.io\/aws-load-balancer-name: "openmatch-frontend"/g' | kubectl apply -f -
+# Add annotations to create the LB as an internet facing NLB (to be accessed by the clients and used with Global Accelerator)
+kubectl annotate svc -n open-match open-match-frontend-loadbalancer service.beta.kubernetes.io/aws-load-balancer-scheme=internet-facing
 kubectl annotate svc -n open-match open-match-frontend-loadbalancer service.beta.kubernetes.io/aws-load-balancer-type=nlb --overwrite=true
 
 # Create a certificate for open-match
-kubectl apply -f ../../manifests/open-match-tls-certmanager.cert.yaml
+kubectl apply -f ${ROOT_PATH}/manifests/open-match-tls-certmanager.cert.yaml
 
 # Modify the secrets open-match-tls-rootca and open-match-tls-server installed by helm with the values from open-match-tls-certmanager
 TLS_CA_VALUE=$(kubectl get secret open-match-tls-certmanager -n open-match -ojsonpath='{.data.ca\.crt}')
@@ -24,4 +28,3 @@ kubectl delete pods -n open-match --all
 
 # Copy the open-match-tls-certmanager from open-match to agones-openmatch namespace
 kubectl get secret open-match-tls-certmanager -o json -n open-match | jq '.metadata.namespace="agones-openmatch"' | kubectl apply -f -
-

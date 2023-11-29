@@ -8,7 +8,6 @@ metadata:
   labels:
     app: agones-openmatch-director
   name: agones-openmatch-director
-  namespace: agones-openmatch
 spec:
   progressDeadlineSeconds: 600
   replicas: 1
@@ -105,6 +104,8 @@ spec:
           name: agones-tls-volume
         - mountPath: /app/openmatch-tls
           name: openmatch-tls-volume
+        - mountPath: /app/global-accelerator-mapping
+          name: global-accelerator-mapping
       hostname: agones-openmatch-director
       dnsPolicy: ClusterFirst
       restartPolicy: Always
@@ -120,4 +121,8 @@ spec:
           defaultMode: 420
           secretName: open-match-tls-certmanager
         name: openmatch-tls-volume
+      - configMap:
+          defaultMode: 420
+          name: global-accelerator-mapping
+        name: global-accelerator-mapping
 

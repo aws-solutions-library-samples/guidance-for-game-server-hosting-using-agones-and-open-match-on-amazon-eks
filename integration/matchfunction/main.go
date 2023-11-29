@@ -7,12 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"strconv"
-	// "open-match.dev/open-match/tutorials/matchmaker101/matchfunction/mmf"
 )
-
-// This tutorial implenents a basic Match Function that is hosted in the below
-// configured port. You can also configure the Open Match QueryService endpoint
-// with which the Match Function communicates to query the Tickets.
 
 func main() {
 	var queryServiceAddr string
@@ -24,7 +19,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Printf("Usage: \n")
 		fmt.Printf("players -queryServiceAddr addr -queryServicePort PortNumber -serverPort PortNumber -players NumPlayers\n")
-		flag.PrintDefaults() // prints default usage
+		flag.PrintDefaults()
 	}
 	flag.Parse()
 	TicketsPerPoolPerMatch = players

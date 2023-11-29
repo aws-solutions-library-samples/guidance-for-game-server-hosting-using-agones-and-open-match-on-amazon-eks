@@ -45,12 +45,7 @@ func main() {
 	log.Println("Starting wrapper for ncat")
 	log.Printf("ncat server running on port %s \n", *port)
 
-	// cmdString := strings.Split(*port, " ")
-	// command, args := cmdString[0], cmdString[1:]
-
 	cmd := exec.Command("/usr/bin/ncat", "--chat", "--listen", "-p "+*port, "-vvv") // #nosec
-	// cmd.Stderr = os.Stderr
-	// cmd.Stdout = os.Stdout
 	cmdReader, err := cmd.StderrPipe()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error creating StdoutPipe for Cmd", err)
@@ -63,13 +58,7 @@ func main() {
 		for scanner.Scan() {
 
 			str := scanner.Text()
-			// fmt.Println("str")
 			fmt.Println(str)
-			// matched, _ := regexp.MatchString(`Listening on?`, str)
-			// if matched {
-			// 	fmt.Println("str")
-			// }
-			// }
 
 			action, player := handleLogLine(str)
 			switch action {
@@ -129,7 +118,6 @@ func main() {
 	}
 }
 
-// doHealth sends the regular Health Pings
 func doHealth(sdk *sdk.SDK) {
 	tick := time.Tick(2 * time.Second)
 	for {
@@ -140,41 +128,29 @@ func doHealth(sdk *sdk.SDK) {
 	}
 }
 
-// handleLogLine compares the log line to a series of regexes to determine if any action should be taken.
-// TODO: This could probably be handled better with a custom type rather than just (string, *string)
 func handleLogLine(line string) (string, *string) {
-	// fmt.Fprintln(os.Stderr, "Line: %s", line)
-	// The various regexes that match server lines
 	playerJoin := regexp.MustCompile(`on file descriptor \b(\w+)\.$`)
 	playerLeave := regexp.MustCompile(`Closing connection`)
 	noMorePlayers := regexp.MustCompile(`Broker connection count is 0`)
 	serverStart := regexp.MustCompile(`Version`)
 
-	// Start the server
 	if serverStart.MatchString(line) {
 		log.Print("server ready")
 		return "READY", nil
 	}
 
-	// Player tracking
 	if playerJoin.MatchString(line) {
 		matches := playerJoin.FindSubmatch([]byte(line))
 		player := string(matches[1])
 		log.Printf("Player %s joined\n", player)
 		log.Printf("Player joined\n")
 		return "PLAYERJOIN", &player
-		// return "PLAYERJOIN", nil
 	}
 	if playerLeave.MatchString(line) {
-		// matches := playerLeave.FindSubmatch([]byte(line))
-		// player := string(matches[1])
-		// log.Printf("Player %s disconnected", player)
 		log.Printf("Player disconnected")
-		// return "PLAYERLEAVE", &player
 		return "PLAYERLEAVE", nil
 	}
 
-	// All the players left, send a shutdown
 	if noMorePlayers.MatchString(line) {
 		return "SHUTDOWN", nil
 	}

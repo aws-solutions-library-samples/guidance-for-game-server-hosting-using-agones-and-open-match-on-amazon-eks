@@ -4,15 +4,16 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
-	"regexp"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -60,18 +61,99 @@ func main() {
 	caFile = "./agones-tls/" + caFile
 	regionsArr := strings.Split(regions, ",")
 	rangesArr := strings.Split(ranges, ",")
+	accelerator := make(map[string]string)
+
+	log.Printf("Opening files")
+
+	gzippedMapping1, err := os.Open("/app/global-accelerator-mapping/mapping1.gz")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer gzippedMapping1.Close()
+
+	gzippedMapping2, err := os.Open("/app/global-accelerator-mapping/mapping2.gz")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer gzippedMapping2.Close()
+
+	acceleratorFile1, err := os.ReadFile("/app/global-accelerator-mapping/accelerator1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	accelerator[regionsArr[0]] = string(acceleratorFile1)
+	acceleratorFile2, err := os.ReadFile("/app/global-accelerator-mapping/accelerator2")
+	if err != nil {
+		log.Fatal(err)
+	}
+	accelerator[regionsArr[1]] = string(acceleratorFile2)
+
+	mapping1Reader, err := gzip.NewReader(gzippedMapping1)
+	defer mapping1Reader.Close()
+
+	mapping2Reader, err := gzip.NewReader(gzippedMapping2)
+	defer mapping2Reader.Close()
+
+	mapping1, err := io.ReadAll(mapping1Reader)
+	if err != nil {
+		panic(err)
+	}
+	mapping2, err := io.ReadAll(mapping2Reader)
+	if err != nil {
+		panic(err)
+	}
+	mappingJson := make(map[string]map[string]int)
+	var mapping1Json, mapping2Json map[string]int
+	err = json.Unmarshal(mapping1, &mapping1Json)
+	if err != nil {
+		log.Fatal("Error during Unmarshal() mapping1: ", err)
+	}
+	mappingJson[regionsArr[0]] = mapping1Json
+	err = json.Unmarshal(mapping2, &mapping2Json)
+	if err != nil {
+		log.Fatal("Error during Unmarshal() mapping2: ", err)
+	}
+	mappingJson[regionsArr[1]] = mapping2Json
+	count := 0
+	for key, value := range mapping1Json {
+		if count < 10 {
+			log.Printf("%s: %d\n", key, value)
+			count++
+		} else {
+			break
+		}
+	}
+	for key, value := range mapping1Json {
+		if key == "10.1.49.175:7010" {
+			log.Printf("%s: %d\n", key, value)
+		}
+	}
+	log.Printf("------------------------")
+	count = 0
+	for key, value := range mapping2Json {
+		if count < 10 {
+			log.Printf("%s: %d\n", key, value)
+			count++
+		} else {
+			break
+		}
+	}
+	err = json.Unmarshal(mapping2, &mapping2Json)
+	if err != nil {
+		log.Fatal("Error during Unmarshal() mapping2: ", err)
+	}
 
 	// Connect to Open Match Backend.
 
-	beCert, err := ioutil.ReadFile("./openmatch-tls/tls.crt")
+	beCert, err := os.ReadFile("./openmatch-tls/tls.crt")
 	if err != nil {
 		panic(err)
 	}
-	beKey, err := ioutil.ReadFile("./openmatch-tls/tls.key")
+	beKey, err := os.ReadFile("./openmatch-tls/tls.key")
 	if err != nil {
 		panic(err)
 	}
-	beCacert, err := ioutil.ReadFile("./openmatch-tls/ca.crt")
+	beCacert, err := os.ReadFile("./openmatch-tls/ca.crt")
 	if err != nil {
 		panic(err)
 	}
@@ -108,7 +190,7 @@ func main() {
 				if len(matches) > 0 {
 					log.Printf("Generated %v matches for profile %v", len(matches), p.GetName())
 				}
-				if err := assign(be, matches); err != nil {
+				if err := assign(be, matches, mappingJson, accelerator); err != nil {
 					log.Printf("Failed to assign servers to matches, got %s", err.Error())
 					return
 				}
@@ -152,7 +234,7 @@ func fetch(be pb.BackendServiceClient, p *pb.MatchProfile) ([]*pb.Match, error) 
 	return result, nil
 }
 
-// creates a grpc client dial option with TLS configuration.
+// Creates a grpc client dial option with TLS configuration.
 func createRemoteClusterDialOption(clientCert, clientKey, caCert []byte) (grpc.DialOption, error) {
 	// Load client cert
 	cert, err := tls.X509KeyPair(clientCert, clientKey)
@@ -162,10 +244,7 @@ func createRemoteClusterDialOption(clientCert, clientKey, caCert []byte) (grpc.D
 
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}}
 	if len(caCert) != 0 {
-		// Load CA cert, if provided, and trust the server certificate.
-		// This is required for self-signed certs.
 		tlsConfig.RootCAs = x509.NewCertPool()
-		// tlsConfig.ServerName = "open-match-backend"
 		if !tlsConfig.RootCAs.AppendCertsFromPEM(caCert) {
 			return nil, errors.New("only PEM format is accepted for server CA")
 		}
@@ -175,18 +254,18 @@ func createRemoteClusterDialOption(clientCert, clientKey, caCert []byte) (grpc.D
 }
 
 // Get allocation from the Agones Allocator Service
-func getAllocation(matchId string) string {
+func getAllocation(matchId string) *pba.AllocationResponse {
 	log.Printf("Requesting server allocation from Agones")
 	endpoint := allocatorAddr + ":" + strconv.Itoa(allocatorPort)
-	cert, err := ioutil.ReadFile(certFile)
+	cert, err := os.ReadFile(certFile)
 	if err != nil {
 		panic(err)
 	}
-	key, err := ioutil.ReadFile(keyFile)
+	key, err := os.ReadFile(keyFile)
 	if err != nil {
 		panic(err)
 	}
-	cacert, err := ioutil.ReadFile(caFile)
+	cacert, err := os.ReadFile(caFile)
 	if err != nil {
 		panic(err)
 	}
@@ -216,24 +295,39 @@ func getAllocation(matchId string) string {
 	if err != nil {
 		panic(err)
 	}
-	return response.String()
+	return response
 }
 
-func assign(be pb.BackendServiceClient, matches []*pb.Match) error {
+func assign(be pb.BackendServiceClient, matches []*pb.Match, mappingJson map[string]map[string]int, accelerator map[string]string) error {
 	for _, match := range matches {
 		ticketIDs := []string{}
 		for _, t := range match.GetTickets() {
 			ticketIDs = append(ticketIDs, t.Id)
 		}
 		allocation := getAllocation(match.GetMatchId())
-		gameServer := regexp.MustCompile(`gameServerName:"(.*)" ports:<name:"(.*)" port:(.*) > address:"(.*)" nodeName:"(.*)"`)
-		matches := gameServer.FindSubmatch([]byte(allocation))
-		log.Printf("Agones Allocator response: %s", allocation)
-		gameServerAddress := string(matches[4])
-		log.Printf("Gameserver: %s", gameServerAddress)
-		gameServerPort := string(matches[3])
-		log.Printf("Port: %s", gameServerPort)
-		conn := fmt.Sprintf(gameServerAddress + ":" + gameServerPort)
+		log.Printf("Agones Allocator response: %s", allocation.String())
+
+		var gameServerAddress string
+		for _, addr := range allocation.GetAddresses() {
+			if addr.GetType() == "InternalIP" {
+				gameServerAddress = addr.GetAddress()
+				break
+			}
+		}
+		log.Printf("Gameserver address: %s", gameServerAddress)
+		var gameServerPort int32
+		for _, p := range allocation.GetPorts() {
+			if p.GetName() == "default" {
+				gameServerPort = p.GetPort()
+				break
+			}
+		}
+		log.Printf("Port: %s", strconv.Itoa(int(gameServerPort)))
+		internalIpPort := gameServerAddress + ":" + strconv.Itoa(int(gameServerPort))
+		log.Printf("internalIpPort: %s", internalIpPort)
+		profileRegion := match.GetMatchId()[36:45]
+		globalAcceleratorPort, _ := mappingJson[profileRegion][internalIpPort]
+		conn := accelerator[profileRegion] + ":" + strconv.Itoa(globalAcceleratorPort)
 		req := &pb.AssignTicketsRequest{
 			Assignments: []*pb.AssignmentGroup{
 				{
@@ -248,8 +342,7 @@ func assign(be pb.BackendServiceClient, matches []*pb.Match) error {
 		if _, err := be.AssignTickets(context.Background(), req); err != nil {
 			return fmt.Errorf("AssignTickets failed for match %v, got %w", match.GetMatchId(), err)
 		}
-
-		log.Printf("Assigned server %s to match %v", gameServerAddress+":"+gameServerPort, match.GetMatchId())
+		log.Printf("Assigned server %s to match %v", accelerator[profileRegion]+":"+strconv.Itoa(globalAcceleratorPort), match.GetMatchId())
 	}
 
 	return nil

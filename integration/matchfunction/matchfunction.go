@@ -9,7 +9,6 @@ import (
 	"sort"
 	"time"
 
-	// "github.com/golang/protobuf/ptypes"
 	"google.golang.org/protobuf/types/known/anypb"
 	"open-match.dev/open-match/pkg/matchfunction"
 	"open-match.dev/open-match/pkg/pb"
@@ -17,27 +16,17 @@ import (
 
 const (
 	matchName = "basic-matchfunction"
-
-	// Uncomment if following the tutorial
-	// TicketsPerPoolPerMatch = 4
 )
 
 var TicketsPerPoolPerMatch int
 
-// Run is this match function's implementation of the gRPC call defined in api/matchfunction.proto.
 func (s *MatchFunctionService) Run(req *pb.RunRequest, stream pb.MatchFunction_RunServer) error {
-	// Fetch tickets for the pools specified in the Match Profile.
-	// log.Printf("Generating proposals for function %v", req.GetProfile().GetName())
-	// log.Printf("------------------------------START-----------------------------------------")
-
 	poolTickets, err := matchfunction.QueryPools(stream.Context(), s.queryServiceClient, req.GetProfile().GetPools())
 	if err != nil {
 		log.Printf("Failed to query tickets for the given pools, got %s", err.Error())
 		return err
 	}
 
-	// log.Printf("Pool Tickets: %v", poolTickets)
-	// Generate proposals.
 	proposals, err := makeMatches(req.GetProfile(), poolTickets)
 	if err != nil {
 		log.Printf("Failed to generate matches, got %s", err.Error())
@@ -47,13 +36,11 @@ func (s *MatchFunctionService) Run(req *pb.RunRequest, stream pb.MatchFunction_R
 		log.Printf("Generating proposals for function %v", req.GetProfile().GetName())
 		log.Printf("Streaming %d proposals to Open Match", len(proposals))
 
-		// Stream the generated proposals back to Open Match.
 		for _, proposal := range proposals {
 			if err := stream.Send(&pb.RunResponse{Proposal: proposal}); err != nil {
 				log.Printf("Failed to stream proposals to Open Match, got %s", err.Error())
 				return err
 			}
-			// log.Printf("Proposal %v", proposal)
 		}
 	}
 
@@ -66,15 +53,12 @@ func makeMatches(p *pb.MatchProfile, poolTickets map[string][]*pb.Ticket) ([]*pb
 	unsortedMatchTickets := []*pb.Ticket{}
 	for {
 		insufficientTickets := false
-		// matchTickets := []*pb.Ticket{}
 		for pool, tickets := range poolTickets {
 			if len(tickets) < TicketsPerPoolPerMatch {
-				// This pool is completely drained out. Stop creating matches.
 				insufficientTickets = true
 				break
 			}
 
-			// Remove the Tickets from this pool and add to the match proposal.
 			unsortedMatchTickets = append(unsortedMatchTickets, tickets[0:TicketsPerPoolPerMatch]...)
 			poolTickets[pool] = tickets[TicketsPerPoolPerMatch:]
 		}
@@ -95,8 +79,6 @@ func makeMatches(p *pb.MatchProfile, poolTickets map[string][]*pb.Ticket) ([]*pb
 			matchTickets := []*pb.Ticket{}
 			for ticketIndex := 0; ticketIndex < TicketsPerPoolPerMatch; ticketIndex++ {
 				currentTicket := unsortedMatchTickets[TicketsPerPoolPerMatch*matchIndex+ticketIndex]
-				// log.Printf("currentTicket: %s", currentTicket)
-				// log.Printf(p.GetName()[20:37]+": %g", currentTicket.SearchFields.DoubleArgs[p.GetName()[20:37]])
 				totalLatency = totalLatency + currentTicket.SearchFields.DoubleArgs[p.GetName()[20:37]]
 				matchTickets = append(matchTickets, currentTicket)
 			}
@@ -121,14 +103,8 @@ func makeMatches(p *pb.MatchProfile, poolTickets map[string][]*pb.Ticket) ([]*pb
 				},
 			})
 
-			// log.Printf("Match Tickets: %d %s", len(matchTickets), matchTickets)
-			// log.Printf("Evaluation Input: %s", evaluationInput)
 		}
 	}
-
-	// if matches != nil {
-	// 	log.Printf("matches %s", matches)
-	// }
 
 	return matches, nil
 

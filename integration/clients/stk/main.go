@@ -24,7 +24,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Printf("Usage: \n")
 		fmt.Printf("player -frontend FrontendAddress:Port -latencyUsEast1 int -latencyUsEast2 int -path /path/to/stk/binary\n")
-		flag.PrintDefaults() // prints default usage
+		flag.PrintDefaults()
 	}
 	flag.Parse()
 	serverPort := allocation.GetServerAssignment(omFrontendEndpoint, latencyUsEast1, latencyUsEast2)

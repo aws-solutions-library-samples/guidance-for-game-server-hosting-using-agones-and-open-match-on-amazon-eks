@@ -5,7 +5,7 @@ FROM public.ecr.aws/docker/library/golang:1.20.3-alpine3.17 as go
 RUN apk add git
 WORKDIR /app
 ENV GO111MODULE=on
-ENV GOPROXY=direct
+ENV GOPROXY=direct,https://proxy.golang.org
 
 COPY go.mod .
 COPY go.sum .

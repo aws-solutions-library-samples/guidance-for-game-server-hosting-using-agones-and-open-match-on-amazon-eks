@@ -1,5 +1,5 @@
 # Security recommendations
-This page provides suggestions of actions that should be taken to make the solution more secure according to AWS best practices.
+This page provides suggestions of actions that should be taken to make the solution more secure according to AWS best practices, before using it in a production environment.
 
 ## Enable control plane logs
 A solutions cluster(s) must have control plane logs enabled in order to publish API, audit, controller manager, scheduler or authenticator logs to AWS CloudWatch Logs. You must enable each log type individually to send logs for your cluster.CloudWatch Logs ingestion, archive storage, and data scanning rates apply to enabled control plane logs.
@@ -25,6 +25,10 @@ Recommendations:
 - Use separate namespaces as a way to isolate secrets from different applications
 - Use volume mounts instead of environment variables
 - Use an external secrets provider (AWS Secret manager or Vault)
+
+## Harden the security of the ECR repositories
+- Make your ECR images IMMUTABLE to prevent code injection through image mutation
+- Encrypt the ECR repositories using KMS
 
 ## Scan for runtime security vulnerabilities
 Runtime security provides active protection for your containers while they're running. The idea is to detect and/or prevent malicious activity from occuring inside the container.
@@ -56,5 +60,5 @@ The following items should implement security best practices to secure Kubernete
 ## Enable ELB/ALB access logs 
 Use access logs to allow customers to analyze traffic patterns and identify and troubleshoot security issues.
 
-## Enable VPC Flow Logs 
-VPC Flow Logs capture network flow information for a VPC, subnet, or network interface and stores it in Amazon CloudWatch Logs. Flow log data can help customers troubleshoot network issues; for example, to diagnose why specific traffic is not reaching an instance, which might be a result of overly restrictive security group rules.
+## Enable VPC and Global Accelerator Flow Logs 
+Flow Logs capture network flow information for a VPC, subnet, network interfaces, and Accelerators, and stores it in Amazon CloudWatch Logs. Flow log data can help customers troubleshoot network issues; for example, to diagnose why specific traffic is not reaching an instance, which might be a result of overly restrictive security group rules.
