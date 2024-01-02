@@ -14,6 +14,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,7 +31,7 @@ import (
 // Profiles, submits the tickets to Agones Allocator service
 // and returns the allocation to the Frontend.
 
-var backendAddr, functionAddr, allocatorAddr, backendPort, certFile, keyFile, caFile, namespace, regions, ranges string
+var backendAddr, functionAddr, allocatorAddr, backendPort, certFile, keyFile, caFile, namespace, region, regions, ranges, regionPattern string
 var functionPort, allocatorPort, interval int
 var multicluster bool
 
@@ -62,6 +63,8 @@ func main() {
 	regionsArr := strings.Split(regions, ",")
 	rangesArr := strings.Split(ranges, ",")
 	accelerator := make(map[string]string)
+	// Regular expression for AWS regions
+	regionPattern = `(us(-gov)?|af|ap|ca|cn|eu|il|me|sa)-(central|(north|south)?(east|west)?)-\d`
 
 	log.Printf("Opening files")
 
@@ -114,30 +117,6 @@ func main() {
 		log.Fatal("Error during Unmarshal() mapping2: ", err)
 	}
 	mappingJson[regionsArr[1]] = mapping2Json
-	count := 0
-	for key, value := range mapping1Json {
-		if count < 10 {
-			log.Printf("%s: %d\n", key, value)
-			count++
-		} else {
-			break
-		}
-	}
-	for key, value := range mapping1Json {
-		if key == "10.1.49.175:7010" {
-			log.Printf("%s: %d\n", key, value)
-		}
-	}
-	log.Printf("------------------------")
-	count = 0
-	for key, value := range mapping2Json {
-		if count < 10 {
-			log.Printf("%s: %d\n", key, value)
-			count++
-		} else {
-			break
-		}
-	}
 	err = json.Unmarshal(mapping2, &mapping2Json)
 	if err != nil {
 		log.Fatal("Error during Unmarshal() mapping2: ", err)
@@ -269,6 +248,9 @@ func getAllocation(matchId string) *pba.AllocationResponse {
 	if err != nil {
 		panic(err)
 	}
+	regexpPattern := regexp.MustCompile(regionPattern)
+	region := regexpPattern.FindString(matchId)
+
 	request := &pba.AllocationRequest{
 		Namespace: namespace,
 		MultiClusterSetting: &pba.MultiClusterSetting{
@@ -276,7 +258,7 @@ func getAllocation(matchId string) *pba.AllocationResponse {
 		},
 		GameServerSelectors: []*pba.GameServerSelector{
 			{
-				MatchLabels: map[string]string{"region": matchId[36:45]},
+				MatchLabels: map[string]string{"region": region},
 			},
 		},
 	}
@@ -304,7 +286,11 @@ func assign(be pb.BackendServiceClient, matches []*pb.Match, mappingJson map[str
 		for _, t := range match.GetTickets() {
 			ticketIDs = append(ticketIDs, t.Id)
 		}
-		allocation := getAllocation(match.GetMatchId())
+		matchId := match.GetMatchId()
+		regexpPattern := regexp.MustCompile(regionPattern)
+		region = regexpPattern.FindString(matchId)
+
+		allocation := getAllocation(matchId)
 		log.Printf("Agones Allocator response: %s", allocation.String())
 
 		var gameServerAddress string
@@ -325,9 +311,8 @@ func assign(be pb.BackendServiceClient, matches []*pb.Match, mappingJson map[str
 		log.Printf("Port: %s", strconv.Itoa(int(gameServerPort)))
 		internalIpPort := gameServerAddress + ":" + strconv.Itoa(int(gameServerPort))
 		log.Printf("internalIpPort: %s", internalIpPort)
-		profileRegion := match.GetMatchId()[36:45]
-		globalAcceleratorPort, _ := mappingJson[profileRegion][internalIpPort]
-		conn := accelerator[profileRegion] + ":" + strconv.Itoa(globalAcceleratorPort)
+		globalAcceleratorPort, _ := mappingJson[region][internalIpPort]
+		conn := accelerator[region] + ":" + strconv.Itoa(globalAcceleratorPort)
 		req := &pb.AssignTicketsRequest{
 			Assignments: []*pb.AssignmentGroup{
 				{
@@ -342,7 +327,7 @@ func assign(be pb.BackendServiceClient, matches []*pb.Match, mappingJson map[str
 		if _, err := be.AssignTickets(context.Background(), req); err != nil {
 			return fmt.Errorf("AssignTickets failed for match %v, got %w", match.GetMatchId(), err)
 		}
-		log.Printf("Assigned server %s to match %v", accelerator[profileRegion]+":"+strconv.Itoa(globalAcceleratorPort), match.GetMatchId())
+		log.Printf("Assigned server %s to match %v", accelerator[region]+":"+strconv.Itoa(globalAcceleratorPort), match.GetMatchId())
 	}
 
 	return nil

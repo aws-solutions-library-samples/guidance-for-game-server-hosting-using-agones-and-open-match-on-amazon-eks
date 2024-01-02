@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"sort"
 	"time"
 
@@ -70,16 +71,20 @@ func makeMatches(p *pb.MatchProfile, poolTickets map[string][]*pb.Ticket) ([]*pb
 		count++
 	}
 	totalLatency := 0.0
+	// Regular expression for AWS regions
+	regionPattern := `(us(-gov)?|af|ap|ca|cn|eu|il|me|sa)-(central|(north|south)?(east|west)?)-\d`
+	regexpPattern := regexp.MustCompile(regionPattern)
 	if len(unsortedMatchTickets) > 0 {
 		sort.Slice(unsortedMatchTickets, func(i, j int) bool {
 			return unsortedMatchTickets[i].SearchFields.DoubleArgs["latency-"+unsortedMatchTickets[i].SearchFields.StringArgs["region"]] < unsortedMatchTickets[j].SearchFields.DoubleArgs["latency-"+unsortedMatchTickets[j].SearchFields.StringArgs["region"]]
 		})
-
 		for matchIndex := 0; matchIndex < count; matchIndex++ {
 			matchTickets := []*pb.Ticket{}
 			for ticketIndex := 0; ticketIndex < TicketsPerPoolPerMatch; ticketIndex++ {
+				log.Printf("MatchProfile name: %s: ", p.GetName())
 				currentTicket := unsortedMatchTickets[TicketsPerPoolPerMatch*matchIndex+ticketIndex]
-				totalLatency = totalLatency + currentTicket.SearchFields.DoubleArgs[p.GetName()[20:37]]
+				region := regexpPattern.FindString(p.GetName())
+				totalLatency = totalLatency + currentTicket.SearchFields.DoubleArgs["latency-"+region]
 				matchTickets = append(matchTickets, currentTicket)
 			}
 
@@ -93,8 +98,10 @@ func makeMatches(p *pb.MatchProfile, poolTickets map[string][]*pb.Ticket) ([]*pb
 				return nil, fmt.Errorf("Failed to marshal DefaultEvaluationCriteria, got %w", err)
 			}
 
+			matchId := fmt.Sprintf("profile-%v-time-%v-%v", p.GetName(), time.Now().Format("2006-01-02T15:04:05.00"), matchIndex)
+			log.Printf("MatchId: %s: ", matchId)
 			matches = append(matches, &pb.Match{
-				MatchId:       fmt.Sprintf("profile-%v-time-%v-%v", p.GetName(), time.Now().Format("2006-01-02T15:04:05.00"), matchIndex),
+				MatchId:       matchId,
 				MatchProfile:  p.GetName(),
 				MatchFunction: matchName,
 				Tickets:       matchTickets,
