@@ -4,7 +4,7 @@
 echo "#####"
 NAMESPACE=gameservers
 CLUSTER_NAME=$1
-AWS_REGION=$2
+REGION=$2
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
 KEY_FILE=client_${CLUSTER_NAME}.key
 CERT_FILE=client_${CLUSTER_NAME}.crt

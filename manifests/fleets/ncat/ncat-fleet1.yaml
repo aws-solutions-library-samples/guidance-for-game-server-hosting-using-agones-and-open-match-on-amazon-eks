@@ -13,7 +13,7 @@ spec:
     metadata:
       labels:
         pool: ONE
-        region: ${AWS_REGION}
+        region: ${REGION}
     spec:
       players:
       ports:

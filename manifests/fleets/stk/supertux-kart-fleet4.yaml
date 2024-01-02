@@ -14,7 +14,7 @@ spec:
       labels:
         mode: MAJOR_MODE_SINGLE
         minorGameMode: MINOR_MODE_SOCCER
-        region: ${AWS_REGION}
+        region: ${REGION}
     spec:
       players:
         # set this GameServer's initial player capacity to 10
