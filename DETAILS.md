@@ -45,7 +45,7 @@ If you receive a different message, use `sh -x scripts/test-agones-tls.sh` and/o
 #### Build and deploy the game server fleets
 
 
-The commands on this section build the image, push it to the ECR repository, and use it to deploy 4 fleets of ncat game servers on each cluster. It uses the value of each `AWS_REGION` where the cluster is located to tag the fleets, which we will use later when allocating game servers depending on the region they are located:
+The commands on this section build the image, push it to the ECR repository, and use it to deploy 4 fleets of ncat game servers on each cluster. It uses the value of each `REGION` where the cluster is located to tag the fleets, which we will use later when allocating game servers depending on the region they are located:
 
 > **About the ncat and supertuxkart fleet files:** These files deploy the [Agones Fleet](https://agones.dev/site/docs/reference/fleet/) CRDs. A `Fleet` is a set of warm `GameServers` that are available to be allocated from. You can inspect the content of the files on the folders [./fleets/ncat](./fleets/ncat) and [./fleets/stk](./fleets/stk).
 
@@ -108,7 +108,7 @@ export ALLOCATOR_IP_CLUSTER2=$(sh scripts/set-allocator-ip.sh ${CLUSTER2} us-eas
 2. Switch the kubernetes context to `agones-gameservers-1`:
 ```bash
 export CLUSTER_NAME="agones-gameservers-1"
-export AWS_REGION="us-east-1"
+export REGION="us-east-1"
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
 ```
 
@@ -258,7 +258,7 @@ We will deploy and test the customizations to the cluster 1.
 1. Switch the kubernetes context to `agones-gameservers-1`
 ```bash
 export CLUSTER_NAME="agones-gameservers-1"
-export AWS_REGION="us-east-1"
+export REGION="us-east-1"
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
 ```
 
@@ -329,14 +329,14 @@ done
 2. Get cluster 1 Frontend Load Balancer address, the TLS cert and run the player client
 ```bash
 export CLUSTER_NAME="agones-gameservers-1"
-export AWS_REGION="us-east-1"
+export REGION="us-east-1"
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
 FRONTEND=$(kubectl get svc -n open-match open-match-frontend-loadbalancer -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 cd integration/clients/ncat
 kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > public.cert
 kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.private\.key}" | base64 -d > private.key
 kubectl get secret open-match-tls-rootca -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > publicCA.cert
-go run main.go -frontend $FRONTEND:50504  -latencyUsEast1 10 -latencyUsEast2 30
+go run main.go -frontend $FRONTEND:50504  -latencyRegion1 10 -latencyRegion2 30
 ```
 ```bash
 YYYY/MM/DD hh:mm:ss Connecting to Open Match Frontend
@@ -408,7 +408,7 @@ ncat-pool1-m72zl-7l6lp   Shutdown         ec2-52-87-246-98.compute-1.amazonaws.c
 ncat-pool1-m72zl-52mzz   RequestReady     ec2-52-87-246-98.compute-1.amazonaws.com   7034   ip-192-168-4-119.ec2.internal   2s
 ncat-pool1-m72zl-52mzz   Ready            ec2-52-87-246-98.compute-1.amazonaws.com   7034   ip-192-168-4-119.ec2.internal   2s
 ```
-10. You can repeat the process with different values to the `-latencyUsEast1` and `-latencyUsEast2` flags when calling the client, to verify how it affects the game server allocation.
+10. You can repeat the process with different values to the `-latencyRegion1` and `-latencyRegion2` flags when calling the client, to verify how it affects the game server allocation.
 
 ### Testing with SuperTuxKart
 We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in [integration/clients/stk/](integration/clients/stk/) to test the SuperTuxKart integration with Open Match and Agones, similarly to our ncat example above. You will have to deploy the fleets changing the value `export GAMESERVER_TYPE=ncat` to `export GAMESERVER_TYPE=stk` (remove any `ncat` fleets before, with the command `kubectl delete fleets -n gameservers --all`), and follow the instructions in the [integration/clients/stk/](integration/clients/stk/) folder. Be aware that we will need to run 4 instances of the SuperTuxKart client (like we did with our terminal clients in the ncat example), so it can be a bit demanding to your computer resources.
