@@ -50,7 +50,7 @@ func createRemoteClusterDialOption(clientCert, clientKey, caCert []byte) (grpc.D
 	return grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)), nil
 }
 
-func GetServerAssignment(omFrontendEndpoint string, latencyUsEast1 int, latencyUsEast2 int) string {
+func GetServerAssignment(omFrontendEndpoint string, region1 string, latencyRegion1 int, region2 string, latencyRegion2 int) string {
 	log.Printf("Connecting to Open Match Frontend: " + omFrontendEndpoint)
 	cert, err := os.ReadFile("public.cert")
 	if err != nil {
@@ -80,8 +80,8 @@ func GetServerAssignment(omFrontendEndpoint string, latencyUsEast1 int, latencyU
 		MatchRequest: &MatchRequest{
 			Tags: []string{GAME_MODE_SESSION},
 			DoubleArgs: map[string]float64{
-				"latency-us-east-1": float64(latencyUsEast1),
-				"latency-us-east-2": float64(latencyUsEast2),
+				"latency-" + region1: float64(latencyRegion1),
+				"latency-" + region2: float64(latencyRegion2),
 			},
 		}}
 	req := &pb.CreateTicketRequest{

@@ -79,7 +79,7 @@ spec:
         - name: NAMESPACE
           value: agones-system
         - name: REGIONS
-          value: us-east-1,us-east-2
+          value: ${REGION1},${REGION2}
         - name: RANGES
           value: 0-24,25-49,50-74,74-99,100-9999
         - name: INTERVAL

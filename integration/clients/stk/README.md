@@ -1,18 +1,13 @@
 # SuperTuxKart client wrapper
 
-This code implements a wrapper to call the SuperTuxKart client with the server/port returned by the [allocation](../allocation-client/) module that handles the communication with the Open Match Frontend.
+This code implements a wrapper to call the SuperTuxKart client with the server/port returned by the [allocation](../allocation-client/) module that handles the communication with the Open Match Frontend. 
 
+Get the TLS cert of the Frontend and run the player client:
 ```bash
-Usage:
-player -frontend FrontendAddress:Port -latencyUsEast1 int -latencyUsEast2 int -path /path/to/stk/binary
-  -frontend string
-    	Open Match Frontend Endpoint (default "localhost:50504")
-  -latencyUsEast1 int
-    	Latency to region us-east-1 (default 100)
-  -latencyUsEast2 int
-    	Latency to region us-east-2 (default 100)
-  -path string
-    	SuperTuxKart binary path (default "supertuxkart")
+kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > public.cert
+kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.private\.key}" | base64 -d > private.key
+kubectl get secret open-match-tls-rootca -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > publicCA.cert
+go run main.go -frontend <global_accelerator_address>:50504 -region1 $REGION1 -latencyRegion1 10 -region2 $REGION2 -latencyRegion2 30  -path /path/to/stk/binary
 ```
 
-Note: this code uses TLS to connect to the Open Match Frontend, it expects the files `public.cert`, `publicCA.cert`, and `private.key` in the same directory. Refer to the main [README.md](../../../README.md#test-the-ncat-server) for instructions on how to create the TLS files.
+
