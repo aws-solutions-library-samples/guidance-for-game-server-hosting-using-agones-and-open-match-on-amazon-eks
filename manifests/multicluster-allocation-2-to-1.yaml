@@ -1,7 +1,7 @@
 ## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 ## SPDX-License-Identifier: MIT-0
 
-# Configures remote multi-cluster allocation from agones-gameservers-1 to agones-gameservers-2
+# Configures remote multi-cluster allocation from cluster-1 to cluster-2
 apiVersion: multicluster.agones.dev/v1
 kind: GameServerAllocationPolicy
 metadata:
@@ -11,7 +11,7 @@ spec:
   connectionInfo:
     allocationEndpoints:
     - ${ALLOCATOR_IP_CLUSTER_1}
-    clusterName: "agones-gameservers-1"
+    clusterName: "cluster-1"
     namespace: gameservers
     secretName: allocator-secret-to-cluster-1
   priority: 1

@@ -12,7 +12,7 @@ kubectl apply -f ${ROOT_PATH}/manifests/multicluster-allocation-1.yaml
 envsubst < ${ROOT_PATH}/manifests/multicluster-allocation-1-to-2.yaml | kubectl apply -f -
 # kubectl delete secret allocator-secret-to-cluster-2 -n agones-system
 kubectl create secret generic \
---from-file=tls.crt=${ROOT_PATH}/client_agones-gameservers-2.crt \
---from-file=tls.key=${ROOT_PATH}/client_agones-gameservers-2.key \
---from-file=ca.crt=${ROOT_PATH}/ca_agones-gameservers-2.crt \
+--from-file=tls.crt=${ROOT_PATH}/client_${CLUSTER2}.crt \
+--from-file=tls.key=${ROOT_PATH}/client_${CLUSTER2}.key \
+--from-file=ca.crt=${ROOT_PATH}/ca_${CLUSTER2}.crt \
 allocator-secret-to-cluster-2 -n agones-system

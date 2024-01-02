@@ -7,7 +7,7 @@ ROOT_PATH=$2
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
 kubectl get pods -n open-match -o wide
 # Create Load Balancer
-kubectl expose deployment open-match-frontend  -n open-match  --type=LoadBalancer  --name=open-match-frontend-loadbalancer -oyaml --dry-run=client | sed  's/creationTimestamp: null/annotations:\n    service\.beta\.kubernetes\.io\/aws-load-balancer-name: "openmatch-frontend"/g' | kubectl apply -f -
+kubectl expose deployment open-match-frontend  -n open-match  --type=LoadBalancer  --name=open-match-frontend-loadbalancer -oyaml --dry-run=client | sed  's/creationTimestamp: null/annotations:\n    service\.beta\.kubernetes\.io\/aws-load-balancer-name: "'${CLUSTER_NAME}'-om-fe"/g' | kubectl apply -f -
 # Add annotations to create the LB as an internet facing NLB (to be accessed by the clients and used with Global Accelerator)
 kubectl annotate svc -n open-match open-match-frontend-loadbalancer service.beta.kubernetes.io/aws-load-balancer-scheme=internet-facing
 kubectl annotate svc -n open-match open-match-frontend-loadbalancer service.beta.kubernetes.io/aws-load-balancer-type=nlb --overwrite=true

@@ -2,7 +2,7 @@
 ## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 ## SPDX-License-Identifier: MIT-0
 
-# Configures local multi-cluster allocation on agones-gameservers-1
+# Configures local multi-cluster allocation on cluster-1
 apiVersion: multicluster.agones.dev/v1
 kind: GameServerAllocationPolicy
 metadata:
@@ -10,7 +10,7 @@ metadata:
   namespace: agones-system
 spec:
   connectionInfo:
-    clusterName: "agones-gameservers-2"
+    clusterName: "cluster-2"
     namespace: gameservers
   priority: 1
   weight: 100
