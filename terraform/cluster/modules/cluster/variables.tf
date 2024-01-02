@@ -122,7 +122,7 @@ variable "gameserver_minport" {
 }
 variable "gameserver_maxport" {
   type    = number
-  default = 7085
+  default = 7029
 }
 variable "open_match" {
   type = bool

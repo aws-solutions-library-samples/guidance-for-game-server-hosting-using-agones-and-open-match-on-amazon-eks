@@ -280,7 +280,7 @@ gameservers:
     - default
     - gameservers
   minPort: 7000
-  maxPort: 7085
+  maxPort: 7029
   podPreserveUnknownFields: false
 
 helm:

@@ -1,8 +1,12 @@
 ## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 ## SPDX-License-Identifier: MIT-0
 locals {
-  gameservers_subnet_ids = slice(module.vpc.private_subnets, 3, 6)
-  azs                    = slice(data.aws_availability_zones.available.names, 0, 3)
+  gameservers_subnet_ids      = slice(module.vpc.private_subnets, 0, 2)
+  agones_system_subnet_ids    = slice(module.vpc.private_subnets, 2, 4)
+  agones_metrics_subnet_ids   = slice(module.vpc.private_subnets, 4, 6)
+  open_match_subnet_ids       = slice(module.vpc.private_subnets, 6, 8)
+  agones_openmatch_subnet_ids = slice(module.vpc.private_subnets, 8, 10)
+  azs                         = slice(data.aws_availability_zones.available.names, 0, 2)
   tags = {
     Blueprint  = var.cluster_name
     GithubRepo = "github.com/aws-ia/terraform-aws-eks-blueprints"
@@ -165,7 +169,12 @@ module "vpc" {
   cidr = var.cluster_cidr
 
   azs                     = local.azs
-  private_subnets         = concat([for k, v in local.azs : cidrsubnet(var.cluster_cidr, 4, k)], [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 48)])
+  private_subnets         = concat([for k, v in local.azs : cidrsubnet(var.cluster_cidr, 6, k)], 
+                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 8)],
+                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 16)],
+                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 24)],
+                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 32)]
+                            )
   public_subnets          = [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 56)]
   map_public_ip_on_launch = true
 

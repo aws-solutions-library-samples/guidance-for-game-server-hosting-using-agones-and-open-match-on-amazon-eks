@@ -3,7 +3,7 @@
 ## SPDX-License-Identifier: MIT-0
 variable "ecr_region" {
   type    = string
-  default = "us-east-1"
+  # default = "us-east-1"
 }
 
 # CIDR values must not overlap
@@ -24,7 +24,7 @@ variable "cluster_1_name" {
 
 variable "cluster_1_region" {
   type    = string
-  default = "us-east-1"
+  # default = "us-east-1"
 }
 variable "cluster_1_endpoint" {
   type = string
@@ -55,7 +55,7 @@ variable "cluster_2_name" {
 
 variable "cluster_2_region" {
   type    = string
-  default = "us-east-2"
+  # default = "us-east-2"
 }
 
 variable "requester_cidr" {

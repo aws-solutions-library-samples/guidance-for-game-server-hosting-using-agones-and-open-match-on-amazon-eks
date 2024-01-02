@@ -15,6 +15,7 @@ provider "aws" {
 
 data "aws_caller_identity" "current" {}
 
+
 ## ECR
 resource "aws_ecr_replication_configuration" "cross_ecr_replication" {
   replication_configuration {
@@ -29,7 +30,7 @@ resource "aws_ecr_replication_configuration" "cross_ecr_replication" {
 resource "aws_ecr_repository" "agones-openmatch-director" {
   #checkov:skip=CKV_AWS_136:Encryption disabled for tests
   name                 = "agones-openmatch-director"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "IMMUTABLE" # Remove if you need to push the container with the same tag to the ECR (not recommended)
   force_delete         = true # Remove to avoid destroying when not empty
   image_scanning_configuration {
     scan_on_push = true
@@ -38,7 +39,7 @@ resource "aws_ecr_repository" "agones-openmatch-director" {
 resource "aws_ecr_repository" "agones-openmatch-mmf" {
   #checkov:skip=CKV_AWS_136:Encryption disabled for tests
   name                 = "agones-openmatch-mmf"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "IMMUTABLE" # Remove if you need to push the container with the same tag to the ECR (not recommended)
   force_delete         = true # Remove to avoid destroying when not empty
   image_scanning_configuration {
     scan_on_push = true
@@ -47,7 +48,7 @@ resource "aws_ecr_repository" "agones-openmatch-mmf" {
 resource "aws_ecr_repository" "agones-openmatch-ncat-server" {
   #checkov:skip=CKV_AWS_136:Encryption disabled for tests
   name                 = "agones-openmatch-ncat-server"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "IMMUTABLE" # Remove if you need to push the container with the same tag to the ECR (not recommended)
   force_delete         = true # Remove to avoid destroying when not empty
   image_scanning_configuration {
     scan_on_push = true
@@ -95,12 +96,12 @@ resource "aws_route" "accepter" {
 ## AWS Global Accelerators
 ## Front End Acelerators
 data "aws_lb" "frontend_lb" {
-  name = "openmatch-frontend"
+  name = "${var.cluster_1_name}-om-fe"
 }
 
 resource "aws_globalaccelerator_accelerator" "aga_frontend" {
   #checkov:skip=CKV_AWS_75:Flow logs not needed
-  name            = "agones-openmatch-frontend"
+  name            = "${var.cluster_1_name}-om-fe"
   ip_address_type = "IPV4"
   enabled         = true
 
@@ -147,7 +148,7 @@ resource "aws_globalaccelerator_custom_routing_endpoint_group" "aga_gs_cluster_1
   endpoint_group_region = var.cluster_1_region
   destination_configuration {
     from_port = 7000
-    to_port   = 7085
+    to_port   = 7029
     protocols = ["TCP"]
   }
 
@@ -157,9 +158,9 @@ resource "aws_globalaccelerator_custom_routing_endpoint_group" "aga_gs_cluster_1
   endpoint_configuration {
     endpoint_id = var.cluster_1_gameservers_subnets[1]
   }
-  endpoint_configuration {
-    endpoint_id = var.cluster_1_gameservers_subnets[2]
-  }
+  # endpoint_configuration {
+  #   endpoint_id = var.cluster_1_gameservers_subnets[2]
+  # }
 }
 resource "null_resource" "allow_custom_routing_traffic_cluster_1" {
 
@@ -168,11 +169,11 @@ resource "null_resource" "allow_custom_routing_traffic_cluster_1" {
     endpoint_group_arn = aws_globalaccelerator_custom_routing_endpoint_group.aga_gs_cluster_1.id
     endpoint_id_1      = var.cluster_1_gameservers_subnets[0]
     endpoint_id_2      = var.cluster_1_gameservers_subnets[1]
-    endpoint_id_3      = var.cluster_1_gameservers_subnets[2]
+    # endpoint_id_3      = var.cluster_1_gameservers_subnets[2]
   }
 
   provisioner "local-exec" {
-    command = "aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_1} --allow-all-traffic-to-endpoint --region us-west-2;aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_2} --allow-all-traffic-to-endpoint --region us-west-2;aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_3} --allow-all-traffic-to-endpoint --region us-west-2"
+    command = "aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_1} --allow-all-traffic-to-endpoint --region us-west-2;aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_2} --allow-all-traffic-to-endpoint --region us-west-2"
   }
   depends_on = [
     aws_globalaccelerator_custom_routing_endpoint_group.aga_gs_cluster_1
@@ -199,7 +200,7 @@ resource "aws_globalaccelerator_custom_routing_endpoint_group" "aga_gs_cluster_2
   endpoint_group_region = var.cluster_2_region
   destination_configuration {
     from_port = 7000
-    to_port   = 7085
+    to_port   = 7029
     protocols = ["TCP"]
   }
 
@@ -209,9 +210,9 @@ resource "aws_globalaccelerator_custom_routing_endpoint_group" "aga_gs_cluster_2
   endpoint_configuration {
     endpoint_id = var.cluster_2_gameservers_subnets[1]
   }
-  endpoint_configuration {
-    endpoint_id = var.cluster_2_gameservers_subnets[2]
-  }
+  # endpoint_configuration {
+  #   endpoint_id = var.cluster_2_gameservers_subnets[2]
+  # }
 }
 
 resource "null_resource" "allow_custom_routing_traffic_cluster_2" {
@@ -221,11 +222,11 @@ resource "null_resource" "allow_custom_routing_traffic_cluster_2" {
     endpoint_group_arn = aws_globalaccelerator_custom_routing_endpoint_group.aga_gs_cluster_2.id
     endpoint_id_1      = var.cluster_2_gameservers_subnets[0]
     endpoint_id_2      = var.cluster_2_gameservers_subnets[1]
-    endpoint_id_3      = var.cluster_2_gameservers_subnets[2]
+    # endpoint_id_3      = var.cluster_2_gameservers_subnets[2]
   }
 
   provisioner "local-exec" {
-    command = "aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_1} --allow-all-traffic-to-endpoint --region us-west-2;aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_2} --allow-all-traffic-to-endpoint --region us-west-2;aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_3} --allow-all-traffic-to-endpoint --region us-west-2"
+    command = "aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_1} --allow-all-traffic-to-endpoint --region us-west-2;aws globalaccelerator allow-custom-routing-traffic --endpoint-group-arn ${self.triggers.endpoint_group_arn} --endpoint-id ${self.triggers.endpoint_id_2} --allow-all-traffic-to-endpoint --region us-west-2"
   }
 
   depends_on = [

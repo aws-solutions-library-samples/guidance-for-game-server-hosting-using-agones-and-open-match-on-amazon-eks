@@ -9,7 +9,7 @@ locals {
   name               = var.cluster_name
   cluster_region     = var.cluster_region
   gameserver_minport = 7000
-  gameserver_maxport = 7085
+  gameserver_maxport = 7029
 }
 
 
@@ -127,6 +127,18 @@ resource "helm_release" "agones" {
   set {
     name  = "agones.allocator.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-name"
     value = "${var.cluster_name}-allocator"
+    type  = "string"
+  }
+
+  set {
+    name  = "agones.ping.http.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-name"
+    value = "${var.cluster_name}-ping-http"
+    type  = "string"
+  }
+
+  set {
+    name  = "agones.ping.udp.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-name"
+    value = "${var.cluster_name}-ping-udp"
     type  = "string"
   }
 
@@ -271,6 +283,6 @@ resource "null_resource" "generate_agones_certs" {
 # Used to output the address of the Load Balancer created by null_resource.open_match_ingress_configuration
 data "aws_lb" "frontend_lb" {
   count      = var.configure_open_match ? 1 : 0
-  name       = "openmatch-frontend"
+  name       = "${var.cluster_name}-om-fe"
   depends_on = [null_resource.open_match_ingress_configuration]
 }
