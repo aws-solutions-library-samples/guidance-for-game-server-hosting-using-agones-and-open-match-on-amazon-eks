@@ -109,7 +109,7 @@ Create a private S3 bucket to store the remote states for the infrastructure.
 ```bash
 SEED=$(openssl rand -hex 4)
 TF_BUCKET="agones-gameservers-${SEED}"
-if [ $REGION1 == "us-east-1" ]; then
+if [[ $REGION1 == "us-east-1" ]]; then
     aws s3api create-bucket --bucket ${TF_BUCKET}  --acl private --region ${REGION1} 
 else
     aws s3api create-bucket --bucket ${TF_BUCKET}  --acl private --region ${REGION1} --create-bucket-configuration LocationConstraint=${REGION1}
@@ -285,6 +285,7 @@ kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.priva
 kubectl get secret open-match-tls-rootca -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > publicCA.cert
 REGION1=us-east-1
 REGION2=us-east-2
+export GOPROXY=direct
 go run main.go -frontend <global_accelerator_address>:50504 -region1 $REGION1 -latencyRegion1 10 -region2 $REGION2 -latencyRegion2 30
 ```
 
