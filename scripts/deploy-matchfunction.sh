@@ -9,7 +9,7 @@ export REGISTRY=${ACCOUNT_ID}.dkr.ecr.${REGION1}.amazonaws.com
 echo "- Login to ECR registry -"
 aws ecr get-login-password --region ${REGION1} | docker login --username AWS --password-stdin $REGISTRY
 echo "- Build matchfunction image -"
-docker build  --platform=linux/amd64 -t $REGISTRY/agones-openmatch-mmf integration/matchfunction
+docker build  -t $REGISTRY/agones-openmatch-mmf integration/matchfunction
 echo "- Push image to register -"
 docker push $REGISTRY/agones-openmatch-mmf
 

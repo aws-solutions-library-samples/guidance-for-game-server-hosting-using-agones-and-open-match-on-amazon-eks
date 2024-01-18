@@ -11,7 +11,7 @@ export REGISTRY=${ACCOUNT_ID}.dkr.ecr.${REGION1}.amazonaws.com
 
 
 aws ecr get-login-password --region ${REGION1} | docker login --username AWS --password-stdin $REGISTRY
-docker buildx build --platform=linux/amd64  -t $REGISTRY/agones-openmatch-ncat-server integration/ncat-server
+docker build  -t $REGISTRY/agones-openmatch-ncat-server integration/ncat-server
 docker push $REGISTRY/agones-openmatch-ncat-server
 
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME1})
