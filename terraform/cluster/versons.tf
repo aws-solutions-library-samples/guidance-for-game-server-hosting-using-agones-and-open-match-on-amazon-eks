@@ -9,7 +9,4 @@ terraform {
       version = ">= 5.8.0"
     }
   }
-  backend "s3" {
-    key = "cluster/terraform.tfstate"
-  }
 }

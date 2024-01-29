@@ -90,7 +90,7 @@ We will run terraform in three steps, following the `terraform` folder:
 2. terraform/intra-cluster: Deploys several components inside both clusters, using `helm` charts and `kubernetes` manifests.
 3. terraform/extra-cluster: Creates additional AWS resources outside the cluster, like ECR repositories, VPC peering and Global Accelerator infrastructures.
 
-### Prepare terraform environment variables and Backend
+### Prepare terraform environment variables
 Define the names of our clusters and two different regions to run them. We can customize the clusters names, regions and VPC CIDR using the variables passed to the Terraform stack. In our examples we will be using `agones-gameservers-1` and `10.1.0.0/16` on region `us-east-1`, and `agones-gameservers-2` with `10.2.0.0/16` region `us-east-2`. Note that the CIDR of the VPCs should not overlap, since we will use VPC Peering to connect them.
 ```bash
 CLUSTER1=agones-gameservers-1
@@ -102,36 +102,15 @@ CIDR2="10.2.0.0/16"
 VERSION="1.28"
 ```
 
-We will be using the S3 Terraform backend, so we will need to create a S3 bucket to store the Terraform states and a DynamoDB table to handle the Terraform execution lock. In our example, we use the same region defined by the `REGION1` environment variable above.
+For simplicity, we will be using local Terraform state files. In production workloads, we recommend storing the state files remotely, for example using the [S3 Terraform backend](https://developer.hashicorp.com/terraform/language/settings/backends/s3).
 
-Create a private S3 bucket to store the remote states for the infrastructure.
 
-```bash
-SEED=$(openssl rand -hex 4)
-TF_BUCKET="agones-gameservers-${SEED}"
-if [[ $REGION1 == "us-east-1" ]]; then
-    aws s3api create-bucket --bucket ${TF_BUCKET}  --acl private --region ${REGION1} 
-else
-    aws s3api create-bucket --bucket ${TF_BUCKET}  --acl private --region ${REGION1} --create-bucket-configuration LocationConstraint=${REGION1}
-fi
-```
-
-Note: We create the bucket in the same region as the first cluster, and we check if the region is `us-east-1`, as in our example, to avoid an `InvalidLocationConstraint` error using `LocationConstraint=us-east-1`.
-
-Create DynamoDB table, in the same region, to hold the state locks.
-```bash
-aws dynamodb create-table --region ${REGION1} --table-name agones-gameservers-tf-lock   --attribute-definitions AttributeName=LockID,AttributeType=S    --key-schema AttributeName=LockID,KeyType=HASH   --provisioned-throughput ReadCapacityUnits=1,WriteCapacityUnits=1
-```
 ### terraform/cluster
 
 Run the following commands to create EKS clusters, with the names and regions configured in the previous steps.
 ```bash
-# Initialize Terraform, using the S3 backend
-terraform -chdir=terraform/cluster init \
- -backend-config="bucket=${TF_BUCKET}" \
- -backend-config="region=${REGION1}" \
- -backend-config="dynamodb_table=agones-gameservers-tf-lock" &&
-
+# Initialize Terraform
+terraform -chdir=terraform/cluster init &&
 # Create both clusters
 terraform -chdir=terraform/cluster apply -auto-approve \
  -var="cluster_1_name=${CLUSTER1}" \
@@ -147,11 +126,8 @@ terraform -chdir=terraform/cluster apply -auto-approve \
 ### terraform/intra-cluster
 The commands below will deploy our resources inside the clusters created in the last step. We use the output values from `terraform/cluster` as input to the `terraform/intra-cluster` module.
 ```bash
-# Initialize Terraform, using the S3 backend
-terraform -chdir=terraform/intra-cluster init \
- -backend-config="bucket=${TF_BUCKET}" \
- -backend-config="region=${REGION1}" \
- -backend-config="dynamodb_table=agones-gameservers-tf-lock" &&
+# Initialize Terraform
+terraform -chdir=terraform/intra-cluster init  &&
 # Deploy to the first cluster
 terraform -chdir=terraform/intra-cluster workspace select -or-create=true ${REGION1} &&
 terraform -chdir=terraform/intra-cluster apply -auto-approve \
@@ -183,12 +159,8 @@ terraform -chdir=terraform/intra-cluster apply -auto-approve \
 ### terraform/extra-cluster
 Here we deploy the external components to our infrastructure, and configure resources that need both clusters to deploy, such as VPC Peering and Agones multi-cluster allocation.
 ```bash
-# Initialize Terraform, using the S3 backend
-terraform -chdir=terraform/extra-cluster init \
- -backend-config="bucket=${TF_BUCKET}" \
- -backend-config="region=${REGION1}" \
- -backend-config="dynamodb_table=agones-gameservers-tf-lock" &&
-
+# Initialize Terraform
+terraform -chdir=terraform/extra-cluster init &&
 # Get the values needed by Terraform
 VPC1=$(terraform -chdir=terraform/cluster output -raw vpc_1_id) &&
 SUBNETS1=$(terraform -chdir=terraform/cluster output gameservers_1_subnets) &&
@@ -242,18 +214,18 @@ We added two game servers to test the Agones and Open Match deployments:
 
 We will use the ncat-server deployment to test the Open Match matchmaking. 
 
+**Note: Verify that Docker is running before the next steps.**
+
 Use the command below to build the image, push it to the ECR repository, and deploy 4 fleets of ncat game servers on each cluster. 
 
 ```bash
-sh scripts/deploy-test-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2}
+sh scripts/deploy-ncat-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2}
 ```
-
 
 ## Integrate Open Match with Agones
 This repository contains code and documentation for the customized versions of Open Match `director` and `matchfunction` on the folders [./integration/director/](./integration/director/) and [./integration/matchfunction/](./integration/matchfunction/), as well as the client tools we used in the folder [./integration/clients/](./integration/clients/). 
 
 ### Deploy Match Making Function and Director on the first cluster 
-
 1. Switch the kubernetes context to `$CLUSTER1``
 ```bash
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
@@ -266,7 +238,7 @@ sh scripts/deploy-matchfunction.sh ${CLUSTER1} ${REGION1}
 
 3. Build and deploy the Open Match Director
 ```bash
-sh scripts/deploy-director.sh ${CLUSTER1} ${REGION1} ${REGION2}
+sh scripts/deploy-director.sh ${CLUSTER1} ${REGION1}
 ```
 
 4. Verify that the mmf and director pods are running
@@ -275,14 +247,21 @@ kubectl get pods -n agones-openmatch
 ```
 
 ### Test the ncat server
-Here we test the flow of the Open Match - Agones integration. We use the ncat fleet deployment and the contents of the folder [integration/ncat/client](integration/ncat/client). We will need to open several terminal windows to run this test. 
+Here we test the flow of the Open Match - Agones integration. We use the ncat fleet deployment and the contents of the folder [integration/clients/ncat](integration/clients/ncat). We will need to open several terminal windows to run this test. 
+**Note about the client <-> frontend communication:** In our example, we connect the client directly to the Open Match Frontend, so we need to have the TLS certificates from the frontend available to the client. In a complete game architecture, we would have a [Game Frontend](https://open-match.dev/site/docs/guides/matchmaker/frontend/) between the client and the Open Match, that would handle this communication, among other tasks like authentication, leaderboards, and lobby.
 
-1. Get the TLS cert of the Frontend and run the player client. Here we'll use the value of `global_accelerator_address` from the Terraform deployment. Remember to adjust our regions:
+1. Go to the `integration/clients/ncat`
 ```bash
 cd integration/clients/ncat
+```
+2. Get the TLS cert of the Frontend 
+```bash
 kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > public.cert
 kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.private\.key}" | base64 -d > private.key
 kubectl get secret open-match-tls-rootca -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > publicCA.cert
+```
+3. Run the player client. Here we'll use the value of `global_accelerator_address` from the Terraform deployment. Remember to adjust our regions:
+```bash
 REGION1=us-east-1
 REGION2=us-east-2
 export GOPROXY=direct
@@ -293,8 +272,7 @@ go run main.go -frontend <global_accelerator_address>:50504 -region1 $REGION1 -l
 YYYY/MM/DD hh:mm:ss Ticket ID: cdfu6mqgqm6kj18qr880
 YYYY/MM/DD hh:mm:ss Waiting for ticket assignment
 
-
-2. In three other terminal windows, go to the `integration/clients/ncat` directory and type the  commands from step 2 above. When the fourth client is started, we should have a similar output to the sample below, showing the connection to the Frontend server, the game server assigned to the client and the connection to the game server:
+4. In three other terminal windows, type the commands from the steps **(1.)** and **(3.)** above. When the fourth client is started, we should have a similar output to the sample below, showing the connection to the Frontend server, the game server assigned to the client and the connection to the game server:
 >YYYY/MM/DD hh:mm:ss Connecting to Open Match Frontend
 YYYY/MM/DD hh:mm:ss Ticket ID: cdfu6mqgqm6kj18qr880
 YYYY/MM/DD hh:mm:ss Waiting for ticket assignment  
@@ -310,16 +288,16 @@ YYYY/MM/DD hh:mm:ss Connecting to ncat server
 <announce> 201.17.120.226 is connected as <user8>.
 <announce> already connected: 201.17.120.226 as <user5>, 201.17.120.226 as <user6>, 201.17.120.226 as <user7>.
 
-3. Verify the game servers. Let the command running with the `-w` flag to detect state changes. We should see one server in the `Allocated` state, and the others in the `Ready` state.
+5. In another terminal window, verify the game servers. Let the command running with the `-w` flag to detect state changes. We should see one server in the `Allocated` state, and the others in the `Ready` state.
 ```bash
 kubectl get gs -n gameservers -w
 ```
 
-4. In the terminal windows running the clients, type anything and press enter. We should see the messages replicated to the other client windows.
+6. In the terminal windows running the clients, type anything and press enter. We should see the messages replicated to the other client windows.
 
-5. Press `CTRL-C` in all the client windows. This should close the clients. When the last one closes, switch to the window with the `kubectl get gs -w` command. It should show that the allocated server is shutting down (since all the players disconnected) and a new game server is being provisioned.
+7. Press `CTRL-C` in all the client windows. This should close the clients. When the last one closes, switch to the window with the `kubectl get gs -w` command. It should show that the allocated server is shutting down (since all the players disconnected) and a new game server is being provisioned.
 
-6. We can repeat the process with different values to the `-latencyRegion1` and `-latencyRegion2` flags when calling the client, to verify how it affects the game server allocation. Remember to stop  the `bash kubectl get gs -n gameservers -w` with `CTRL-C`, adjust the kubectl context to the cluster with the lowest latency, using the command 
+8. We can repeat the process with different values to the `-latencyRegion1` and `-latencyRegion2` flags when calling the client, to verify how it affects the game server allocation. Remember to stop the client with `CTRL-C`, adjust the kubectl context to the cluster with the lowest latency, using the command 
 ```bash
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
 ``` 
@@ -331,12 +309,10 @@ and run
 ```bash
 kubectl get gs -n gameservers -w
 ```
-again, before starting the clients.
-
+again, before starting the clients with new values.
 
 ### Test with SuperTuxKart
-We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in [integration/clients/stk/](integration/clients/stk/) to test the SuperTuxKart integration with Open Match and Agones, similarly to our ncat example above. We will have to deploy the fleets changing the value `export GAMESERVER_TYPE=ncat` to `export GAMESERVER_TYPE=stk` (remove any `ncat` fleets before, with the command `kubectl delete fleets -n gameservers --all`), and follow the instructions in the [integration/clients/stk/](integration/clients/stk/) folder. Be aware that we will need to run 4 instances of the SuperTuxKart client (like we did with our terminal clients in the ncat example), so it can be a bit demanding to run it in a single computer.
-
+We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in [integration/clients/stk/](integration/clients/stk/) to test the SuperTuxKart integration with Open Match and Agones, similarly to our ncat example above. Please, refer to the [README.md](integration/clients/stk/README.md) in the stk folder for more instructions.
 
 ## Clean Up Resources
 
@@ -372,9 +348,6 @@ We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in
     aws elbv2 delete-load-balancer --region ${REGION2} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION2} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER2}-allocator')].LoadBalancerArn"  --output text)
     aws elbv2 delete-load-balancer --region ${REGION2} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION2} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER2}-ping-http')].LoadBalancerArn"  --output text)
     aws elbv2 delete-load-balancer --region ${REGION2} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION2} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER2}-ping-udp')].LoadBalancerArn"  --output text)
-    for sg in $(aws ec2 describe-security-groups --region ${REGION1} --filters "Name=vpc-id,Values=$(aws ec2  describe-vpcs --region ${REGION1} --filters "Name=tag:Name,Values='${CLUSTER1}'" --query Vpcs[].VpcId --output text)" --query SecurityGroups[].GroupId --output text); do aws ec2 delete-security-group --region ${REGION1} --group-id $sg ; done
-    for sg in $(aws ec2 describe-security-groups --region ${REGION2} --filters "Name=vpc-id,Values=$(aws ec2  describe-vpcs --region ${REGION2} --filters "Name=tag:Name,Values='${CLUSTER2}'" --query Vpcs[].VpcId --output text)" --query SecurityGroups[].GroupId --output text); do aws ec2 delete-security-group --region ${REGION2} --group-id $sg ; done
-
     ```
 
 - Discard or destroy the internal cluster components
@@ -420,7 +393,6 @@ We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in
     ``` 
 - Destroy the clusters
     ```bash
-
     # Destroy both clusters
     terraform -chdir=terraform/cluster destroy -auto-approve \
     -var="cluster_1_name=${CLUSTER1}" \
@@ -431,16 +403,19 @@ We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in
     -var="cluster_2_cidr=${CIDR2}" \
     -var="cluster_version=${VERSION}"
     ``` 
+    **Note:** if the `terraform destroy` command fails to destroy the subnets or the VPCs, run the commands
+    ```bash
+    for sg in $(aws ec2 describe-security-groups --region ${REGION1} --filters "Name=vpc-id,Values=$(aws ec2  describe-vpcs --region ${REGION1} --filters "Name=tag:Name,Values='${CLUSTER1}'" --query Vpcs[].VpcId --output text)" --query SecurityGroups[].GroupId --output text); do aws ec2 delete-security-group --region ${REGION1} --group-id $sg ; done
+    for sg in $(aws ec2 describe-security-groups --region ${REGION2} --filters "Name=vpc-id,Values=$(aws ec2  describe-vpcs --region ${REGION2} --filters "Name=tag:Name,Values='${CLUSTER2}'" --query Vpcs[].VpcId --output text)" --query SecurityGroups[].GroupId --output text); do aws ec2 delete-security-group --region ${REGION2} --group-id $sg ; done
+    ```
+    and run the `terraform destroy` command again.
 
-- Remove terraform state resources
-```bash
-aws dynamodb delete-table --region ${REGION1} --table-name agones-gameservers-tf-lock
-aws s3 rm s3://${TF_BUCKET} --recursive
-aws s3api delete-bucket --bucket ${TF_BUCKET}
-rm -rf terraform/*/.terraform*
-kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
-kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER2})
-```
+
+- Remove the clusters from kubectl config
+    ```bash
+    kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
+    kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER2})
+    ```
 
 # Security recommendations
 [This page](./security.md) provides suggestions of actions that should be taken to make the solution more secure acording to AWS best practices.

@@ -1,7 +1,0 @@
-terraform.tfstate
-.terraform
-*.tfstate
-*.tfstate.*
-cluster1/.terraform.lock.hcl
-cluster2/.terraform.lock.hcl
-terraform-aws-eks-blueprints/

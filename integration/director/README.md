@@ -5,10 +5,10 @@ This module implements a Director for OpenMatch. The Director fetches Matches fr
 ## Current State ##
 The Director submit MatchProfiles with latency requirements to the [Match Function](../matchfunction), and after receiving the Match Proposals, it sends an allocation request to the Agones Allocator service. After receiving the allocattion from Agones, the Director returns the game server details to Open Match Frontend service, like in the logs below:
 ```
-2023/02/20 21:13:11 Generated 1 matches for profile profile_double_arg:"latency-us-east-2"  max:49  min:25
-2023/02/20 21:13:12 Gameserver: ec2-3-22-130-7.us-east-2.compute.amazonaws.com
-2023/02/20 21:13:12 Port: 7851
-2023/02/20 21:13:12 Assigned server ec2-3-22-130-7.us-east-2.compute.amazonaws.com:7851 to match profile-profile_double_arg:"latency-us-east-2"  max:49  min:25-time-2023-02-20T21:13:11.24-0
+2024/01/20 21:13:11 Generated 1 matches for profile profile_double_arg:"latency-us-east-2"  max:49  min:25
+2024/01/20 21:13:12 Gameserver: ec2-3-22-130-7.us-east-2.compute.amazonaws.com
+2024/01/20 21:13:12 Port: 7851
+2024/01/20 21:13:12 Assigned server ec2-3-22-130-7.us-east-2.compute.amazonaws.com:7851 to match profile-profile_double_arg:"latency-us-east-2"  max:49  min:25-time-2024-01-20T21:13:11.24-0
 
 ```
 ## Testing and monitoring

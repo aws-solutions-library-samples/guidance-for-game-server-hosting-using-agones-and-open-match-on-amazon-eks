@@ -3,8 +3,6 @@
 export NAMESPACE=agones-openmatch
 export CLUSTER_NAME=$1
 export REGION=$2
-export REGION1=$2
-export REGION2=$3
 export ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 export REGISTRY=${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com
 
@@ -22,7 +20,7 @@ kubectl create configmap allocator-tls -n agones-openmatch \
 echo "- Login to ECR registry -"
 aws ecr get-login-password --region ${REGION} | docker login --username AWS --password-stdin $REGISTRY
 echo "- Build director image -"
-docker build  --platform=linux/amd64 -t $REGISTRY/agones-openmatch-director integration/director
+docker buildx build  --platform=linux/amd64 -t $REGISTRY/agones-openmatch-director integration/director
 echo "- Push image to register -"
 docker push $REGISTRY/agones-openmatch-director
 
