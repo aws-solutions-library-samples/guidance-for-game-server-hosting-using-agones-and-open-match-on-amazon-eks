@@ -14,3 +14,20 @@ module "cluster2" {
   cluster_cidr   = var.cluster_2_cidr
   open_match     = false
 }
+#--------------------------------------------------------------
+# Adding guidance solution ID via AWS CloudFormation resource
+#--------------------------------------------------------------
+resource "aws_cloudformation_stack" "guidance_deployment_metrics" {
+    name = "tracking-stack"
+    template_body = <<STACK
+    {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "AWS Guidance ID (SO9387)",
+        "Resources": {
+            "EmptyResource": {
+                "Type": "AWS::CloudFormation::WaitConditionHandle"
+            }
+        }
+    }
+    STACK
+}
