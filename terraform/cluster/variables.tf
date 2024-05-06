@@ -6,7 +6,6 @@ variable "cluster_1_cidr" {
 }
 variable "cluster_1_name" {
   type    = string
-  default = "agones-gameservers-1"
 }
 variable "cluster_1_region" {
   type    = string
@@ -18,7 +17,6 @@ variable "cluster_2_cidr" {
 }
 variable "cluster_2_name" {
   type    = string
-  default = "agones-gameservers-2"
 }
 variable "cluster_2_region" {
   type    = string
