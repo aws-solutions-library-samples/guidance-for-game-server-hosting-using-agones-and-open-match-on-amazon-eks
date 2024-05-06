@@ -149,7 +149,7 @@ resource "aws_globalaccelerator_custom_routing_endpoint_group" "aga_gs_cluster_1
   destination_configuration {
     from_port = 7000
     to_port   = 7029
-    protocols = ["TCP"]
+    protocols = ["TCP","UDP"]
   }
 
   endpoint_configuration {
@@ -201,7 +201,7 @@ resource "aws_globalaccelerator_custom_routing_endpoint_group" "aga_gs_cluster_2
   destination_configuration {
     from_port = 7000
     to_port   = 7029
-    protocols = ["TCP"]
+    protocols = ["TCP","UDP"]
   }
 
   endpoint_configuration {
