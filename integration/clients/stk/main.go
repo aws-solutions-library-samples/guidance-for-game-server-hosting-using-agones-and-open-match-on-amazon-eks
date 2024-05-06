@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-var omFrontendEndpoint, stkPath string
+var omFrontendEndpoint, stkPath, region1, region2 string
 var latencyRegion1, latencyRegion2 int
 
 func main() {

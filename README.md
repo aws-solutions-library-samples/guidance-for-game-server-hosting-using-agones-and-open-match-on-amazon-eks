@@ -176,6 +176,7 @@ AUTH2=$(terraform -chdir=terraform/cluster output -raw cluster_2_certificate_aut
 TOKEN2=$(terraform -chdir=terraform/cluster output -raw cluster_2_token) &&
 # Create resources  
 terraform -chdir=terraform/extra-cluster apply -auto-approve \
+ -var="cluster_1_name=${CLUSTER1}" \
  -var="requester_cidr=${CIDR1}" \
  -var="requester_vpc_id=${VPC1}" \
  -var="requester_route=${ROUTE1}" \
@@ -183,6 +184,7 @@ terraform -chdir=terraform/extra-cluster apply -auto-approve \
  -var="cluster_1_endpoint=${ENDPOINT1}" \
  -var="cluster_1_certificate_authority_data=${AUTH1}" \
  -var="cluster_1_token=${TOKEN1}" \
+ -var="cluster_2_name=${CLUSTER2}" \
  -var="accepter_cidr=${CIDR2}" \
  -var="accepter_vpc_id=${VPC2}" \
  -var="accepter_route=${ROUTE2}" \
@@ -238,7 +240,7 @@ sh scripts/deploy-matchfunction.sh ${CLUSTER1} ${REGION1}
 
 3. Build and deploy the Open Match Director
 ```bash
-sh scripts/deploy-director.sh ${CLUSTER1} ${REGION1}
+sh scripts/deploy-director.sh ${CLUSTER1} ${REGION1} ${REGION2}
 ```
 
 4. Verify that the mmf and director pods are running
@@ -323,10 +325,12 @@ We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in
      -var="requester_cidr=${CIDR1}" \
      -var="requester_vpc_id=${VPC1}" \
      -var="requester_route=${ROUTE1}" \
+     -var="cluster_1_name=${CLUSTER1}" \
      -var="cluster_1_gameservers_subnets=${SUBNETS1}" \
      -var="cluster_1_endpoint=${ENDPOINT1}" \
      -var="cluster_1_certificate_authority_data=${AUTH1}" \
      -var="cluster_1_token=${TOKEN1}" \
+     -var="cluster_2_name=${CLUSTER2}" \
      -var="accepter_cidr=${CIDR2}" \
      -var="accepter_vpc_id=${VPC2}" \
      -var="accepter_route=${ROUTE2}" \
@@ -415,6 +419,10 @@ We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in
     ```bash
     kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
     kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER2})
+    ```
+- Remove the local certificate files
+    ```bash
+    rm -f *.crt *.key integration/clients/stk/*.cert integration/clients/stk/*.key integration/clients/ncat/*.cert integration/clients/ncat/*.key
     ```
 
 # Security recommendations

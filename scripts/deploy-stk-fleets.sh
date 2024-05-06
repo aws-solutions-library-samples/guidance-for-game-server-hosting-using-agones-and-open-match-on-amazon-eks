@@ -8,6 +8,8 @@ export CLUSTER_NAME2=$3
 export REGION2=$4
 
 echo "- Deploy fleets to cluster ${CLUSTER_NAME1} -"
+kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME1})
+export REGION=$REGION1
 for f in manifests/fleets/${GAMESERVER_TYPE}/*
 do
     envsubst < $f  | kubectl apply --namespace ${NAMESPACE} -f -
@@ -18,9 +20,10 @@ kubectl get fleets --namespace ${NAMESPACE}
 kubectl get gameservers --namespace ${NAMESPACE} --show-labels
 echo
 
+
+echo "- Deploy fleets to cluster ${CLUSTER_NAME2} -"
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME2})
 export REGION=$REGION2
-echo "- Deploy fleets to cluster ${CLUSTER_NAME2} -"
 for f in manifests/fleets/${GAMESERVER_TYPE}/*
 do
     envsubst < $f  | kubectl apply --namespace ${NAMESPACE} -f -
