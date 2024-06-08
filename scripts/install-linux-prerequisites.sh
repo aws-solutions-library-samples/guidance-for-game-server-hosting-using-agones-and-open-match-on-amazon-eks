@@ -21,6 +21,11 @@ curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bas
 # install additional tools
 sudo yum -y install jq gettext go openssl bash-completion moreutils
 
+# install terraform
+sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+sudo sed -i -e "s/\$releasever/7/g" "/etc/yum.repos.d/hashicorp.repo"
+sudo yum -y install terraform
+
 # enable bash completion
 kubectl completion bash >>  ~/.bash_completion
 eksctl completion bash >> ~/.bash_completion
