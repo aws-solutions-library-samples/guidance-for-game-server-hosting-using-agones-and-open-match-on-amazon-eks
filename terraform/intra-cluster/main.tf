@@ -96,15 +96,6 @@ module "eks_blueprints_addons" {
   enable_aws_cloudwatch_metrics       = true
   enable_aws_for_fluentbit            = true
   enable_aws_load_balancer_controller = true
-  aws_load_balancer_controller = {
-    set
-      {
-        name  = "enableServiceMutatorWebhook"
-        value = "false"
-      }
-    ]
-  }
-
   enable_cert_manager                 = true
 
 
