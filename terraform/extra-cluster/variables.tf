@@ -80,3 +80,7 @@ variable "cluster_1_gameservers_subnets" {
 variable "cluster_2_gameservers_subnets" {
   type = list(any)
 }
+
+variable "aws_lb_arn" {
+  type = string
+}
