@@ -9,7 +9,7 @@ kubectl get pods -n open-match -o wide
 # Create Load Balancer
 kubectl expose deployment open-match-frontend  -n open-match  --type=LoadBalancer  --name="${CLUSTER_NAME}-om-fe"
 # Add annotations to create the LB as an internet facing NLB (to be accessed by the clients and used with Global Accelerator)
-kubectl annotate svc ${CLUSTER_NAME}-om-fe service.beta.kubernetes.io/aws-load-balancer-scheme=internet-facing -n open-match
+kubectl annotate svc ${CLUSTER_NAME}-om-fe service.beta.kubernetes.io/aws-load-balancer-scheme=internet-facing --overwrite=true -n open-match
 kubectl annotate svc ${CLUSTER_NAME}-om-fe service.beta.kubernetes.io/aws-load-balancer-type=nlb --overwrite=true -n open-match
 
 # Create a certificate for open-match
