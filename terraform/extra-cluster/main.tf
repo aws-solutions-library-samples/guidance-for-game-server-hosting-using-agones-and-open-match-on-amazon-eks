@@ -94,10 +94,6 @@ resource "aws_route" "accepter" {
 
 
 ## AWS Global Accelerators
-## Front End Acelerators
-data "aws_lb" "frontend_lb" {
-  name = "${var.cluster_1_name}-om-fe"
-}
 
 resource "aws_globalaccelerator_accelerator" "aga_frontend" {
   #checkov:skip=CKV_AWS_75:Flow logs not needed
