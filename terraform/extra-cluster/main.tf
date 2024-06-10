@@ -121,8 +121,8 @@ resource "aws_globalaccelerator_endpoint_group" "aga_frontend" {
   listener_arn = aws_globalaccelerator_listener.aga_frontend.id
 
   endpoint_configuration {
-    endpoint_id                    = data.aws_lb.frontend_lb.arn
-    client_ip_preservation_enabled = true
+    endpoint_id                    = var.aws_lb_arn
+    client_ip_preservation_enabled = false
     weight                         = 100
   }
 }
