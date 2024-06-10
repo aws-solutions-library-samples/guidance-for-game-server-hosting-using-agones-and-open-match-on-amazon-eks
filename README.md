@@ -122,7 +122,6 @@ terraform -chdir=terraform/cluster apply -auto-approve \
  -var="cluster_version=${VERSION}"
 ```
 
-
 ### terraform/intra-cluster
 The commands below will deploy our resources inside the clusters created in the last step. We use the output values from `terraform/cluster` as input to the `terraform/intra-cluster` module.
 ```bash
@@ -154,6 +153,18 @@ terraform -chdir=terraform/intra-cluster apply -auto-approve \
  -var="namespaces=[\"agones-system\", \"gameservers\"]" \
  -var="configure_agones=true" \
  -var="configure_open_match=false" 
+```
+
+
+### fetch the load balancer ARN
+Run the commands below to get the ARN of the load balancer deployed in the previous step. The value will be passed as a variable to the next step.
+Set the name of the Load balancer first:
+```bash
+FLB_NAME=$(aws elb describe-load-balancers --region us-east-1 | jq '.LoadBalancerDescriptions[].LoadBalancerName')
+```
+Then retrieve the ARN of the load balancer:
+```bash
+FLB_ARN=$(aws elbv2 describe-load-balancers --names $FLB_NAME --region us-east-1 | jq '.LoadBalancers[].LoadBalancerArn')
 ```
 
 ### terraform/extra-cluster
@@ -195,6 +206,7 @@ terraform -chdir=terraform/extra-cluster apply -auto-approve \
  -var="cluster_1_region=${REGION1}" \
  -var="ecr_region=${REGION1}" \
  -var="cluster_2_region=${REGION2}"
+ -var="aws_lb_arn=${FLB_ARN}"
 
 ```
 After several minutes, Terraform should end with a mesage similar to this:
