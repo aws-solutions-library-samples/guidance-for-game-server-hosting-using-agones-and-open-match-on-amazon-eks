@@ -287,7 +287,7 @@ resource "null_resource" "generate_agones_certs" {
 
 
 # Used to output the address of the Load Balancer created by null_resource.open_match_ingress_configuration
-data "aws_elb" "frontend_lb" {
+data "aws_lb" "frontend_lb" {
   count      = var.configure_open_match ? 1 : 0
   name       = "${var.cluster_name}-om-fe"
   depends_on = [null_resource.open_match_ingress_configuration]
