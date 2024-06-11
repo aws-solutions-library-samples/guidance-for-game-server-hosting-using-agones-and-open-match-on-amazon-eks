@@ -160,11 +160,11 @@ terraform -chdir=terraform/intra-cluster apply -auto-approve \
 Run the commands below to get the ARN of the load balancer deployed in the previous step. The value will be passed as a variable to the next step.
 Set the name of the Load balancer first:
 ```bash
-FLB_NAME=$(aws elb describe-load-balancers --region us-east-1 | jq '.LoadBalancerDescriptions[].LoadBalancerName')
+FLB_NAME=$(kubectl get services -n open-match -o json | jq -r '.items[] | select(.metadata.name=="open-match-frontend-loadbalancer") | .status.loadBalancer.ingress[0].hostname')
 ```
 Then retrieve the ARN of the load balancer:
 ```bash
-FLB_ARN=$(aws elbv2 describe-load-balancers --names $FLB_NAME --region us-east-1 | jq '.LoadBalancers[].LoadBalancerArn')
+FLB_ARN=$( aws elbv2 describe-load-balancers --region us-east-1 | jq -r ".LoadBalancers[] | select(.DNSName==\"$FLB_NAME\") | .LoadBalancerArn")
 ```
 
 ### terraform/extra-cluster
