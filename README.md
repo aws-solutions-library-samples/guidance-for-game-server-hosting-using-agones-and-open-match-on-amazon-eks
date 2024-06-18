@@ -274,6 +274,9 @@ kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.publi
 kubectl get secret open-match-tls-server -n open-match -o jsonpath="{.data.private\.key}" | base64 -d > private.key
 kubectl get secret open-match-tls-rootca -n open-match -o jsonpath="{.data.public\.cert}" | base64 -d > publicCA.cert
 ```
+> [!TIP]
+> TLS secrets should be rotated before their expiry date. Put in place a secrets rotation strategy or leverage the [TLS with AWS PCA issuer pattern](https://github.com/aws-ia/terraform-aws-eks-blueprints/tree/main/patterns/tls-with-aws-pca-issuer) to integrate CertManager with AWS Certificate Manager. 
+ 
 3. Run the player client. Here we'll use the value of `global_accelerator_address` from the Terraform deployment. Remember to adjust our regions:
 ```bash
 REGION1=us-east-1
