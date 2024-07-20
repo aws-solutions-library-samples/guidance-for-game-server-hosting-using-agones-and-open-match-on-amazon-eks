@@ -1,0 +1,509 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AWS CloudFormation template for guidance for game server hosting using agones and open match on amazon eks"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Agones Open Match EKS (AGOE) Configuration"
+        Parameters:
+          - VpcCIDR
+          - PublicSubnetCIDR
+          - RepositoryLocation
+          - Cluster1Name
+          - Cluster1Region
+          - Cluster1CIDR
+          - Cluster2Name
+          - Cluster2Region
+          - Cluster2CIDRisen
+          - KubernetesVersion
+    ParameterLabels:
+      VpcCIDR:
+        default: "AGOE VPC CIDR"
+      PublicSubnetCIDR:
+        default: "AGOE Public Subnet CIDR"
+      RepositoryLocation:
+        default: "AGOE Repository Location"
+      Cluster1Name:
+        default: "AGOE Cluster 1 Name"
+      Cluster1Region:
+        default: "AGOE Cluster 1 Region"
+      Cluster1CIDR:
+        default: "AGOE Cluster 1 CIDR"
+      Cluster2Name:
+        default: "AGOE Cluster 2 Name"
+      Cluster2Region:
+        default: "AGOE Cluster 2 Region"
+      Cluster2CIDR:
+        default: "AGOE Cluster 2 CIDR"
+      KubernetesVersion:
+        default: "AGOE Kubernetes Version"
+      CodeStarConnectionArn:
+        default: "AGOE CodeStar Connection ARN"
+      RepositoryOwner:
+        default: "AGOE Repository Owner"
+      RepositoryName:
+        default: "AGOE Repository Name"
+
+Parameters:
+  VpcCIDR:
+    Type: String
+    Default: 10.192.0.0/16
+  PublicSubnetCIDR:
+    Type: String
+    Default: 10.192.10.0/24
+  CodeStarConnectionArn:
+    Type: String
+    Description: CodeStar connection ARN for GitHub.
+  RepositoryLocation:
+    Type: String
+    Description: The location of the GitHub repository
+  Cluster1Name:
+    Type: String
+    Default: agones-gameservers-1
+    Description: Name of the first EKS cluster
+  Cluster1Region:
+    Type: String
+    Default: us-east-1
+    Description: Region for the first EKS cluster
+  Cluster1CIDR:
+    Type: String
+    Default: "10.1.0.0/16"
+    Description: CIDR block for the first EKS cluster VPC
+  Cluster2Name:
+    Type: String
+    Default: agones-gameservers-2
+    Description: Name of the second EKS cluster
+  Cluster2Region:
+    Type: String
+    Default: us-east-2
+    Description: Region for the second EKS cluster
+  Cluster2CIDR:
+    Type: String
+    Default: "10.2.0.0/16"
+    Description: CIDR block for the second EKS cluster VPC
+  KubernetesVersion:
+    Type: String
+    Default: "1.28"
+    Description: Kubernetes version for the EKS clusters
+  RepositoryOwner:
+    Type: String
+    Description: The owner of the Git repository
+  RepositoryName:
+    Type: String
+    Default: guidance-for-game-server-hosting-using-agones-and-open-match-on-amazon-eks
+    Description: The name of the Git repository
+
+Resources:
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub AGOE-CodeBuild-${AWS::AccountId}-${AWS::Region}
+      Artifacts:
+        Type: S3
+        Location: !Ref CodeBuildArtifactsBucket
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_LARGE
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        EnvironmentVariables:
+          - Name: TERRAFORM_STATE_BUCKET
+            Type: PLAINTEXT
+            Value: !Ref TerraformStateBucket
+          - Name: TERRAFORM_DYNAMO_TABLE
+            Value: !Ref TerraformDynamoDBLockTable
+          - Name: CLUSTER1_NAME
+            Value: !Ref Cluster1Name
+          - Name: CLUSTER1_REGION
+            Value: !Ref Cluster1Region
+          - Name: CLUSTER1_CIDR
+            Value: !Ref Cluster1CIDR
+          - Name: CLUSTER2_NAME
+            Value: !Ref Cluster2Name
+          - Name: CLUSTER2_REGION
+            Value: !Ref Cluster2Region
+          - Name: CLUSTER2_CIDR
+            Value: !Ref Cluster2CIDR
+          - Name: KUBERNETES_VERSION
+            Value: !Ref KubernetesVersion
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Source:
+        Type: GITHUB
+        Location: !Ref RepositoryLocation
+        BuildSpec: |
+          version: 0.2
+          env:
+            variables:
+              REGION: $AWS_REGION
+          phases:
+            install:
+              commands:
+                - echo Installing dependencies...
+                - sudo yum install -y yum-utils shadow-utils
+                - sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+                - sudo yum -y install terraform
+                - terraform --version
+            pre_build:
+              commands:
+                - echo Checking out repositories...
+                - echo "Listing contents of CODEBUILD_SRC_DIR"
+                - ls -la $CODEBUILD_SRC_DIR
+            build:
+              commands:
+                - echo "Build started on $(date)"
+                - echo "Creating the first and second clusters..."
+                - cd terraform/cluster
+                - terraform init
+                - terraform apply -auto-approve -var="cluster_1_name=${CLUSTER1_NAME}" -var="cluster_1_region=${CLUSTER1_REGION}" -var="cluster_1_cidr=${CLUSTER1_CIDR}" -var="cluster_2_name=${CLUSTER2_NAME}" -var="cluster_2_region=${CLUSTER2_REGION}" -var="cluster_2_cidr=${CLUSTER2_CIDR}" -var="cluster_version=${KUBERNETES_VERSION}"
+                - cd ../..
+                - echo "Finished creating the first and second clusters."
+
+                - echo " 1. Deploy to the first cluster"
+                - cd terraform/cluster
+                - export CLUSTER1_ENDPOINT=$(terraform output -raw cluster_1_endpoint)
+                - export CLUSTER1_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_1_certificate_authority_data)
+                - export CLUSTER1_TOKEN=$(terraform output -raw cluster_1_token)
+                - export CLUSTER1_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_1_arn)
+                - cd ../intra-cluster
+                - terraform init
+                - terraform workspace select -or-create ${CLUSTER1_REGION}
+                - terraform apply -auto-approve -var="cluster_name=${CLUSTER1_NAME}" -var="cluster_region=${CLUSTER1_REGION}" -var="cluster_endpoint=$CLUSTER1_ENDPOINT" -var="cluster_certificate_authority_data=$CLUSTER1_CERTIFICATE_AUTHORITY_DATA" -var="cluster_token=$CLUSTER1_TOKEN" -var="cluster_version=${KUBERNETES_VERSION}" -var="oidc_provider_arn=$CLUSTER1_OIDC_PROVIDER_ARN" -var="namespaces=[\"agones-openmatch\", \"agones-system\", \"gameservers\", \"open-match\"]" -var="configure_agones=true" -var="configure_open_match=true"
+
+                - echo " 2 . Deploy to the second cluster"
+                - cd terraform/cluster
+                - export CLUSTER2_ENDPOINT=$(terraform output -raw cluster_2_endpoint)
+                - export CLUSTER2_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_2_certificate_authority_data)
+                - export CLUSTER2_TOKEN=$(terraform output -raw cluster_2_token)
+                - export CLUSTER2_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_2_arn)
+                - cd ../intra-cluster
+                - terraform workspace select -or-create ${CLUSTER2_REGION}
+                - terraform apply -auto-approve -var="cluster_name=${CLUSTER2_NAME}" -var="cluster_region=${CLUSTER2_REGION}" -var="cluster_endpoint=$CLUSTER2_ENDPOINT" -var="cluster_certificate_authority_data=$CLUSTER2_CERTIFICATE_AUTHORITY_DATA" -var="cluster_token=$CLUSTER2_TOKEN" -var="cluster_version=${KUBERNETES_VERSION}" -var="oidc_provider_arn=$CLUSTER2_OIDC_PROVIDER_ARN" -var="namespaces=[\"agones-system\", \"gameservers\"]" -var="configure_agones=true" -var="configure_open_match=false"
+
+                - echo "Fetch the load balancer ARN"
+                - LB_ARN=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(DNSName, '${CLUSTER1_NAME}')].LoadBalancerArn" --output text)
+
+                
+            post_build:
+              commands:
+                - cd ../..
+                - cd terraform/cluster  
+                - terraform destroy -auto-approve -var="cluster_1_name=${CLUSTER1_NAME}" -var="cluster_1_region=${CLUSTER1_REGION}" -var="cluster_1_cidr=${CLUSTER1_CIDR}" -var="cluster_2_name=${CLUSTER2_NAME}" -var="cluster_2_region=${CLUSTER2_REGION}" -var="cluster_2_cidr=${CLUSTER2_CIDR}" -var="cluster_version=${KUBERNETES_VERSION}"
+
+                - "echo Build completed on $(date)"
+                - "echo \"S3 Bucket Name: $TERRAFORM_STATE_BUCKET\""
+                - "echo \"DynamoDB Table Name: $TERRAFORM_DYNAMO_TABLE\""
+
+  CodeBuildArtifactsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub agoe-artifacts-${AWS::AccountId}-${AWS::Region}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  CodeBuildArtifactsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CodeBuildArtifactsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowSSLRequestsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt CodeBuildArtifactsBucket.Arn
+              - !Sub ${CodeBuildArtifactsBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  CodePipelineProject:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub AGOE-CodePipeline-${AWS::AccountId}-${AWS::Region}
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref CodeBuildArtifactsBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeStarSourceConnection
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnectionArn
+                FullRepositoryId: !Join
+                  - "/"
+                  - - !Ref RepositoryOwner
+                    - !Ref RepositoryName
+                BranchName: main
+              OutputArtifacts:
+                - Name: AdminSourceArtifact
+        - Name: Build
+          Actions:
+            - Name: CodeBuild
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              InputArtifacts:
+                - Name: AdminSourceArtifact
+              OutputArtifacts:
+                - Name: FinalSourceArtifacts
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+                PrimarySource: AdminSourceArtifact
+
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:GetRole
+                Resource: "*"
+              # Action for CodeStar connection for GitHub (pre-requisite setup required)
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                Resource: !Ref CodeStarConnectionArn
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource: !GetAtt CodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/*
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/*:log-stream:*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+                  - s3:PutObject
+                Resource:
+                  - !GetAtt CodeBuildArtifactsBucket.Arn
+                  - !Sub ${CodeBuildArtifactsBucket.Arn}/*
+
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - autoscaling:DescribeAutoScalingGroups
+                  - autoscaling:UpdateAutoScalingGroup
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ec2:AttachNetworkInterface
+                  - ec2:CreateNetworkInterface
+                  - ec2:CreateSecurityGroup
+                  - ec2:DeleteNetworkInterface
+                  - ec2:DeleteSecurityGroup
+                  - ec2:DescribeInstances
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcs
+                  - ec2:DetachNetworkInterface
+                  - ec2:ModifyInstanceAttribute
+                  - ec2:ModifyNetworkInterfaceAttribute
+                  - ec2:AssumeRole
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - eks:CreateCluster
+                  - eks:DescribeCluster
+                  - eks:UpdateClusterVersion
+                  - eks:UpdateClusterConfig
+                  - eks:DeleteCluster
+                  - eks:TagResource
+                  - eks:CreateNodegroup 
+                  - eks:DescribeNodegroup
+                  - eks:DeleteNodegroup 
+                  - eks:ListClusters
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - iam:GetRole
+                  - iam:CreateRole
+                  - iam:TagRole
+                  - iam:ListRolePolicies
+                  - iam:PutRolePolicy
+                  - iam:ListAttachedRolePolicies
+                  - iam:GetRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:CreatePolicy
+                  - iam:TagPolicy
+                  - iam:GetPolicy
+                  - iam:GetPolicyVersion
+                  - iam:CreateServiceLinkedRole
+                  - iam:PassRole
+                  - iam:DetachRolePolicy
+                  - iam:ListInstanceProfilesForRole
+                  - iam:DeleteRole
+                  - iam:ListPolicyVersions
+                  - iam:DeletePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:CreateOpenIDConnectProvider
+                  - iam:TagOpenIDConnectProvider
+                  - iam:GetOpenIDConnectProvider
+                  - iam:DeleteOpenIDConnectProvider 
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - kms:CreateKey
+                  - kms:CreateAlias
+                  - kms:TagResource
+                  - kms:ListAliases
+                  - kms:DescribeKey
+                  - kms:GetKeyPolicy
+                  - kms:PutKeyPolicy
+                  - kms:DeleteAlias
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DeleteStack
+                  - cloudformation:GetTemplate
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:TagResource
+                  - logs:PutRetentionPolicy
+                  - logs:DescribeLogGroups
+                  - logs:ListTagsForResource
+                  - logs:DeleteLogGroup
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !GetAtt CodeBuildArtifactsBucket.Arn
+                  - !Sub ${CodeBuildArtifactsBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:DescribeTable
+                Resource: !GetAtt TerraformDynamoDBLockTable.Arn
+
+  TerraformStateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub agoe-state-bucket-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  TerraformStateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TerraformStateBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: !Sub ${TerraformStateBucket.Arn}/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: AES256
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !Sub ${TerraformStateBucket.Arn}
+              - !Sub ${TerraformStateBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  TerraformDynamoDBLockTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    Properties:
+      TableName: !Sub agoe-state-table-lock
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: LockID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: LockID
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+
+Outputs:
+  CodeBuildProjectName:
+    Description: Name of the CodeBuild Project
+    Value: !Ref CodeBuildProject
+
+  TerraformStateBucketName:
+    Description: Name of the S3 Bucket
+    Value: !Ref TerraformStateBucket
+
+  TerraformDynamoDBLockTableName:
+    Description: Name of the DynamoDB Table
+    Value: !Ref TerraformDynamoDBLockTable
