@@ -155,39 +155,33 @@ Resources:
                 - cd terraform/cluster
                 - terraform init
                 - terraform apply -auto-approve -var="cluster_1_name=${CLUSTER1_NAME}" -var="cluster_1_region=${CLUSTER1_REGION}" -var="cluster_1_cidr=${CLUSTER1_CIDR}" -var="cluster_2_name=${CLUSTER2_NAME}" -var="cluster_2_region=${CLUSTER2_REGION}" -var="cluster_2_cidr=${CLUSTER2_CIDR}" -var="cluster_version=${KUBERNETES_VERSION}"
+                - CLUSTER1_ENDPOINT=$(terraform output -raw cluster_1_endpoint)
+                - CLUSTER1_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_1_certificate_authority_data)
+                - CLUSTER1_TOKEN=$(terraform output -raw cluster_1_token)
+                - CLUSTER1_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_1_arn)
+                - CLUSTER2_ENDPOINT=$(terraform output -raw cluster_2_endpoint)
+                - CLUSTER2_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_2_certificate_authority_data)
+                - CLUSTER2_TOKEN=$(terraform output -raw cluster_2_token)
+                - CLUSTER2_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_2_arn)
                 - cd ../..
                 - echo "Finished creating the first and second clusters."
 
-                - echo " 1. Deploy to the first cluster"
-                - cd terraform/cluster
-                - export CLUSTER1_ENDPOINT=$(terraform output -raw cluster_1_endpoint)
-                - export CLUSTER1_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_1_certificate_authority_data)
-                - export CLUSTER1_TOKEN=$(terraform output -raw cluster_1_token)
-                - export CLUSTER1_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_1_arn)
-                - cd ../intra-cluster
+                - echo "Switching to the intra-cluster directory"
+                - cd terraform/intra-cluster
                 - terraform init
                 - terraform workspace select -or-create ${CLUSTER1_REGION}
                 - terraform apply -auto-approve -var="cluster_name=${CLUSTER1_NAME}" -var="cluster_region=${CLUSTER1_REGION}" -var="cluster_endpoint=$CLUSTER1_ENDPOINT" -var="cluster_certificate_authority_data=$CLUSTER1_CERTIFICATE_AUTHORITY_DATA" -var="cluster_token=$CLUSTER1_TOKEN" -var="cluster_version=${KUBERNETES_VERSION}" -var="oidc_provider_arn=$CLUSTER1_OIDC_PROVIDER_ARN" -var="namespaces=[\"agones-openmatch\", \"agones-system\", \"gameservers\", \"open-match\"]" -var="configure_agones=true" -var="configure_open_match=true"
 
-                - echo " 2 . Deploy to the second cluster"
-                - cd terraform/cluster
-                - export CLUSTER2_ENDPOINT=$(terraform output -raw cluster_2_endpoint)
-                - export CLUSTER2_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_2_certificate_authority_data)
-                - export CLUSTER2_TOKEN=$(terraform output -raw cluster_2_token)
-                - export CLUSTER2_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_2_arn)
-                - cd ../intra-cluster
                 - terraform workspace select -or-create ${CLUSTER2_REGION}
                 - terraform apply -auto-approve -var="cluster_name=${CLUSTER2_NAME}" -var="cluster_region=${CLUSTER2_REGION}" -var="cluster_endpoint=$CLUSTER2_ENDPOINT" -var="cluster_certificate_authority_data=$CLUSTER2_CERTIFICATE_AUTHORITY_DATA" -var="cluster_token=$CLUSTER2_TOKEN" -var="cluster_version=${KUBERNETES_VERSION}" -var="oidc_provider_arn=$CLUSTER2_OIDC_PROVIDER_ARN" -var="namespaces=[\"agones-system\", \"gameservers\"]" -var="configure_agones=true" -var="configure_open_match=false"
 
+                - echo "Reset the root directory"
+                - cd ../..
                 - echo "Fetch the load balancer ARN"
                 - LB_ARN=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(DNSName, '${CLUSTER1_NAME}')].LoadBalancerArn" --output text)
 
-                
             post_build:
               commands:
-                - cd ../..
-                - cd terraform/cluster  
-                - terraform destroy -auto-approve -var="cluster_1_name=${CLUSTER1_NAME}" -var="cluster_1_region=${CLUSTER1_REGION}" -var="cluster_1_cidr=${CLUSTER1_CIDR}" -var="cluster_2_name=${CLUSTER2_NAME}" -var="cluster_2_region=${CLUSTER2_REGION}" -var="cluster_2_cidr=${CLUSTER2_CIDR}" -var="cluster_version=${KUBERNETES_VERSION}"
 
                 - "echo Build completed on $(date)"
                 - "echo \"S3 Bucket Name: $TERRAFORM_STATE_BUCKET\""
@@ -369,6 +363,16 @@ Resources:
                   - eks:DescribeNodegroup
                   - eks:DeleteNodegroup 
                   - eks:ListClusters
+                  - eks:DescribeAddon
+                  - eks:DescribeAddonVersions
+                  - eks:CreateAddon
+                  - eks:DeleteAddon
+                  - eks:UpdateAddon
+                  - eks:ListAddons
+                  - eks:ListIdentityProviderConfigs
+                  - eks:ListNodegroups
+                  - eks:ListUpdates
+                  - eks:DescribeUpdate
                 Resource: "*"
               - Effect: Allow
                 Action:
