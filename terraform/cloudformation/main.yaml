@@ -182,10 +182,7 @@ Resources:
 
             post_build:
               commands:
-
-                - "echo Build completed on $(date)"
-                - "echo \"S3 Bucket Name: $TERRAFORM_STATE_BUCKET\""
-                - "echo \"DynamoDB Table Name: $TERRAFORM_DYNAMO_TABLE\""
+                - echo "Build completed on $(date)"
 
   CodeBuildArtifactsBucket:
     Type: AWS::S3::Bucket
