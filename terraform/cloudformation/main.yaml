@@ -15,7 +15,7 @@ Metadata:
           - Cluster1CIDR
           - Cluster2Name
           - Cluster2Region
-          - Cluster2CIDRisen
+          - Cluster2CIDR
           - KubernetesVersion
     ParameterLabels:
       VpcCIDR:
@@ -135,6 +135,8 @@ Resources:
           env:
             variables:
               REGION: $AWS_REGION
+              MAX_RETRIES: 5
+              RETRY_DELAY: 5
           phases:
             install:
               commands:
@@ -143,6 +145,37 @@ Resources:
                 - sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
                 - sudo yum -y install terraform
                 - terraform --version
+
+                - echo "Installing Helm..."
+                - curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+                - chmod 700 get_helm.sh
+                - ./get_helm.sh
+                - helm version
+
+                - echo "Installing jq..."
+                - sudo yum install -y jq
+
+                - echo Installing GetText...
+                - sudo yum install -y gettext
+                - gettext --version
+
+                - echo Installing Go...
+                - sudo yum install -y golang
+                - go version
+
+                - echo "Installing kubectl..."
+                - curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.28.0/2023-04-19/bin/linux/amd64/kubectl
+                - chmod +x ./kubectl
+                - mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$PATH:$HOME/bin
+                - echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc
+                - kubectl version --short --client
+
+                - echo "Checking Docker version..."
+                - docker version
+
+                - echo "Checking OpenSSL version..."
+                - openssl version
+
             pre_build:
               commands:
                 - echo Checking out repositories...
@@ -155,14 +188,14 @@ Resources:
                 - cd terraform/cluster
                 - terraform init
                 - terraform apply -auto-approve -var="cluster_1_name=${CLUSTER1_NAME}" -var="cluster_1_region=${CLUSTER1_REGION}" -var="cluster_1_cidr=${CLUSTER1_CIDR}" -var="cluster_2_name=${CLUSTER2_NAME}" -var="cluster_2_region=${CLUSTER2_REGION}" -var="cluster_2_cidr=${CLUSTER2_CIDR}" -var="cluster_version=${KUBERNETES_VERSION}"
-                - CLUSTER1_ENDPOINT=$(terraform output -raw cluster_1_endpoint)
-                - CLUSTER1_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_1_certificate_authority_data)
-                - CLUSTER1_TOKEN=$(terraform output -raw cluster_1_token)
-                - CLUSTER1_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_1_arn)
-                - CLUSTER2_ENDPOINT=$(terraform output -raw cluster_2_endpoint)
-                - CLUSTER2_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_2_certificate_authority_data)
-                - CLUSTER2_TOKEN=$(terraform output -raw cluster_2_token)
-                - CLUSTER2_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_2_arn)
+                - export CLUSTER1_ENDPOINT=$(terraform output -raw cluster_1_endpoint)
+                - export CLUSTER1_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_1_certificate_authority_data)
+                - export CLUSTER1_TOKEN=$(terraform output -raw cluster_1_token)
+                - export CLUSTER1_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_1_arn)
+                - export CLUSTER2_ENDPOINT=$(terraform output -raw cluster_2_endpoint)
+                - export CLUSTER2_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_2_certificate_authority_data)
+                - export CLUSTER2_TOKEN=$(terraform output -raw cluster_2_token)
+                - export CLUSTER2_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_2_arn)
                 - cd ../..
                 - echo "Finished creating the first and second clusters."
 
@@ -177,8 +210,59 @@ Resources:
 
                 - echo "Reset the root directory"
                 - cd ../..
-                - echo "Fetch the load balancer ARN"
-                - LB_ARN=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(DNSName, '${CLUSTER1_NAME}')].LoadBalancerArn" --output text)
+            
+                - echo "Get the Open Match frontend load balancer name and ARN"
+                - export FLB_NAME=$(kubectl get services -n open-match -o json | jq -r '.items[] | select(.metadata.name=="open-match-frontend-loadbalancer") | .status.loadBalancer.ingress[0].hostname')
+                - echo "Open Match frontend load balancer name $FLB_NAME"
+                - export FLB_ARN=$(aws elbv2 describe-load-balancers --region us-east-1 | jq -r ".LoadBalancers[] | select(.DNSName==\"$FLB_NAME\") | .LoadBalancerArn")
+                - echo "Open Match frontend load balancer ARN $FLB_ARN"
+
+
+                - echo "Get the values needed by Terraform"
+                - export VPC1=$(terraform -chdir=terraform/cluster output -raw vpc_1_id)
+                - echo $VPC1
+
+                - export SUBNETS1=$(terraform -chdir=terraform/cluster output gameservers_1_subnets)
+                - echo $SUBNETS1
+
+                - export ROUTE1=$(terraform -chdir=terraform/cluster output -raw private_route_table_1_id)
+                - echo $ROUTE1          
+
+                - export VPC2=$(terraform -chdir=terraform/cluster output -raw vpc_2_id)
+                - echo $VPC2
+
+                - export SUBNETS2=$(terraform -chdir=terraform/cluster output gameservers_2_subnets)
+                - echo $SUBNETS2
+
+                - export ROUTE2=$(terraform -chdir=terraform/cluster output -raw private_route_table_2_id)
+                - echo $ROUTE2
+
+                - export CLUSTER1_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_1_certificate_authority_data)
+                - echo $CLUSTER1_CERTIFICATE_AUTHORITY_DATA             
+
+                - export CLUSTER1_TOKEN=$(terraform output -raw cluster_1_token)
+                - echo $CLUSTER1_TOKEN
+
+                - export CLUSTER1_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_1_arn)
+                - echo $CLUSTER1_OIDC_PROVIDER_ARN
+
+                - export CLUSTER2_ENDPOINT=$(terraform output -raw cluster_2_endpoint)
+                - echo $CLUSTER2_ENDPOINT
+
+                - export CLUSTER2_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_2_certificate_authority_data)
+                - echo $CLUSTER2_CERTIFICATE_AUTHORITY_DATA
+                
+                - export CLUSTER2_TOKEN=$(terraform output -raw cluster_2_token)
+                - echo $CLUSTER2_TOKEN
+                
+                - export CLUSTER2_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_2_arn)
+                - echo $CLUSTER2_OIDC_PROVIDER_ARN
+
+                - cd terraform/extra-cluster
+                - terraform init
+                - echo "Run the Terraform command for the extra-cluster"
+                - terraform apply -auto-approve -var="cluster_1_name=${CLUSTER1_NAME}" -var="requester_cidr=${CLUSTER1_CIDR}" -var="requester_vpc_id=${VPC1}" -var="requester_route=${ROUTE1}" -var="cluster_1_gameservers_subnets=${SUBNETS1}" -var="cluster_1_endpoint=${CLUSTER1_ENDPOINT}" -var="cluster_1_certificate_authority_data=${CLUSTER1_CERTIFICATE_AUTHORITY_DATA}" -var="cluster_1_token=${CLUSTER1_TOKEN}" -var="cluster_2_name=${CLUSTER2_NAME}" -var="accepter_cidr=${CLUSTER2_CIDR}" -var="accepter_vpc_id=${VPC2}" -var="accepter_route=${ROUTE2}" -var="cluster_2_gameservers_subnets=${SUBNETS2}" -var="cluster_2_endpoint=${CLUSTER2_ENDPOINT}" -var="cluster_2_certificate_authority_data=${CLUSTER2_CERTIFICATE_AUTHORITY_DATA}" -var="cluster_2_token=${CLUSTER2_TOKEN}" -var="cluster_1_region=${CLUSTER1_REGION}" -var="ecr_region=${CLUSTER1_REGION}" -var="cluster_2_region=${CLUSTER2_REGION}" -var="aws_lb_arn=${FLB_ARN}" 
+
 
             post_build:
               commands:
