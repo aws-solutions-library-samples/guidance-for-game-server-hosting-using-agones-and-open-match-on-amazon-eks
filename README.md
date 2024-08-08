@@ -68,7 +68,9 @@ Dockerfile and Kubernetes manifests enable container building and deploying.
 
 
 ## Pre-requisites
-This guidance assumes the user already has access to an AWS account and has the [AWS command line interface](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed and configured to access the account using their credentials. 
+This guidance assumes that the user already has access to an AWS account and has the [AWS command line interface](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed and configured to access the account using their credentials. **Ensure that the output option for the AWS CLI is switched to `json`.** To do so, run the command `aws configure` and modify the output option when prompted. If the AWS CLI output option is set to its default `text` output then you may encounter an error while deploying the terraform templates.
+
+
 While the commands and scripts here were tested on `bash` and `zsh` shells, they can be run with some modifications in other shells, like `Windows PowerShell` or `fish`.
 
 To deploy the infrastructure and run the examples, we need:
@@ -79,7 +81,7 @@ To deploy the infrastructure and run the examples, we need:
 - [gettext](https://www.drupal.org/docs/8/modules/potion/how-to-install-setup-gettext)
 - [Go](https://go.dev/doc/install)
 - [Docker](https://docs.docker.com/get-docker/)
-- [OpenSSL](https://www.openssl.org/source/)
+- [OpenSSL](https://www.openssl.org/source/) (Some operating systems, such as MacOS, may already have this built into them.)
 
 ## Create the clusters and deploy the required components
 

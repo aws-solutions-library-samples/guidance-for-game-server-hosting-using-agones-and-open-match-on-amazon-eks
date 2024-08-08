@@ -1,3 +1,5 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
 
 # CIDR values must not overlap
 variable "cluster_1_cidr" {
@@ -31,4 +33,9 @@ variable "open_match" {
 variable "cluster_version" {
   type    = string
   default = "1.28"
+}
+
+variable "arm_based_instances" {
+  type    = bool
+  default = false
 }

@@ -12,7 +12,27 @@ locals {
     GithubRepo = "github.com/aws-ia/terraform-aws-eks-blueprints"
   }
 
+  # gameservers instance and ami types
+  gameservers_instance_types  = var.use_arm_based_instance_types == true ? var.gameservers_arm_instance_types : var.gameservers_x86_instance_types
+  gameservers_ami_type        = var.use_arm_based_instance_types == true ? var.gameservers_arm_based_ami_type : var.gameservers_x86_based_ami_type
+
+  # agones_system instance and ami types
+  agones_system_instance_types = var.use_arm_based_instance_types == true ? var.agones_system_arm_instance_types : var.agones_system_x86_instance_types
+  agones_system_ami_type      = var.use_arm_based_instance_types == true ? var.agones_system_arm_based_ami_type : var.agones_system_x86_based_ami_type
+
+  # agones_metrics instance and ami types
+  agones_metrics_instance_types = var.use_arm_based_instance_types == true ? var.agones_metrics_arm_instance_types : var.agones_metrics_x86_instance_types
+  agones_metrics_ami_type = var.use_arm_based_instance_types == true ? var.agones_metrics_arm_based_ami_type : var.agones_metrics_x86_based_ami_type
+
+  # open_match instance and ami types
+  open_match_instance_types = var.use_arm_based_instance_types == true ? var.open_match_arm_instance_types : var.open_match_x86_instance_types
+  open_match_ami_type = var.use_arm_based_instance_types == true ? var.open_match_arm_based_ami_type : var.open_match_x86_based_ami_type
+
+  # agones_openmatch instance and ami types
+  agones_openmatch_instance_types = var.use_arm_based_instance_types == true ? var.agones_openmatch_arm_instance_types : var.agones_openmatch_x86_instance_types
+  agones_openmatch_ami_type = var.use_arm_based_instance_types == true ? var.agones_openmatch_arm_based_ami_type : var.agones_openmatch_x86_based_ami_type
 }
+
 data "aws_eks_cluster_auth" "this" {
   name = module.eks.cluster_name
 }
@@ -40,7 +60,8 @@ module "eks" {
 
   eks_managed_node_groups = {
     gameservers = {
-      instance_types = var.gameservers_instance_types
+      instance_types = local.gameservers_instance_types
+      ami_type       = local.gameservers_ami_type
       min_size       = var.gameservers_min_size
       max_size       = var.gameservers_max_size
       desired_size   = var.gameservers_desired_size
@@ -52,7 +73,8 @@ module "eks" {
     }
 
     agones_system = {
-      instance_types = var.agones_system_instance_types
+      instance_types = local.agones_system_instance_types
+      ami_type       = local.agones_system_ami_type
       labels = {
         "agones.dev/agones-system" = true
       }
@@ -70,7 +92,8 @@ module "eks" {
       subnet_ids = slice(module.vpc.private_subnets, 0, 3)
     }
     agones_metrics = {
-      instance_types = var.agones_metrics_instance_types
+      instance_types = local.agones_metrics_instance_types
+      ami_type       = local.agones_metrics_ami_type
       labels = {
         "agones.dev/agones-metrics" = true
       }
@@ -89,7 +112,8 @@ module "eks" {
     }
 
     open_match = {
-      instance_types = var.open_match_instance_types
+      instance_types = local.open_match_instance_types
+      ami_type       = local.open_match_ami_type
       labels = {
         "openmatch" = "system"
       }
@@ -100,7 +124,8 @@ module "eks" {
       subnet_ids = slice(module.vpc.private_subnets, 0, 3)
     }
     agones_openmatch = {
-      instance_types = var.agones_openmatch_instance_types
+      instance_types = local.agones_openmatch_instance_types
+      ami_type       = local.agones_openmatch_ami_type
       labels = {
         "openmatch" = "customization"
       }
@@ -146,6 +171,7 @@ module "eks" {
     }
 
   }
+
   manage_aws_auth_configmap = true
   aws_auth_roles = flatten([
     module.eks_blueprints_admin_team.aws_auth_configmap_role
