@@ -1,20 +1,30 @@
 ## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 ## SPDX-License-Identifier: MIT-0
 module "cluster1" {
-  source              = "./modules/cluster"
-  cluster_name        = var.cluster_1_name
-  cluster_region      = var.cluster_1_region
-  cluster_cidr        = var.cluster_1_cidr
-  open_match          = true
-  use_arm_based_instance_types = var.arm_based_instances
+  source                                        = "./modules/cluster"
+  cluster_name                                  = var.cluster_1_name
+  cluster_region                                = var.cluster_1_region
+  cluster_cidr                                  = var.cluster_1_cidr
+  open_match                                    = true
+  all_mngs_use_arm_based_instance_types         = var.all_arm_based_instances_cluster_1
+  gameservers_mng_uses_arm_based_instances      = var.gameservers_arm_based_instances_cluster_1
+  agones_system_mng_uses_arm_based_instances    = var.agones_system_arm_based_instances_cluster_1
+  agones_metrics_mng_uses_arm_based_instances   = var.agones_metrics_arm_based_instances_cluster_1
+  open_match_mng_uses_arm_based_instances        = var.open_match_arm_based_instances_cluster_1
+  agones_open_match_mng_uses_arm_based_instances = var.agones_open_match_arm_based_instances_cluster_1
 }
 module "cluster2" {
-  source              = "./modules/cluster"
-  cluster_name        = var.cluster_2_name
-  cluster_region      = var.cluster_2_region
-  cluster_cidr        = var.cluster_2_cidr
-  open_match          = false
-  use_arm_based_instance_types = var.arm_based_instances
+  source                                        = "./modules/cluster"
+  cluster_name                                  = var.cluster_2_name
+  cluster_region                                = var.cluster_2_region
+  cluster_cidr                                  = var.cluster_2_cidr
+  open_match                                    = false
+  all_mngs_use_arm_based_instance_types         = var.all_arm_based_instances_cluster_2
+  gameservers_mng_uses_arm_based_instances      = var.gameservers_arm_based_instances_cluster_2
+  agones_system_mng_uses_arm_based_instances    = var.agones_system_arm_based_instances_cluster_2
+  agones_metrics_mng_uses_arm_based_instances   = var.agones_metrics_arm_based_instances_cluster_2
+  open_match_mng_uses_arm_based_instances        = var.open_match_arm_based_instances_cluster_2
+  agones_open_match_mng_uses_arm_based_instances = var.agones_open_match_arm_based_instances_cluster_2
 }
 #--------------------------------------------------------------
 # Adding guidance solution ID via AWS CloudFormation resource

@@ -23,6 +23,20 @@ variable "cluster_version" {
   default = "1.28"
 }
 
+# Variable for ensuring that all available Managed Node Groups (MNGs) use arm-based instances
+# This value must be set to false if the deployer wishes to use a combination of x86 and arm-based MNGs in the EKS Cluster
+variable "all_mngs_use_arm_based_instance_types" {
+  type    = bool
+  default = false
+}
+
+# Variable for ensuring that nodes in the gamerservers Managed Node Group (MNG) use arm-based instances
+# See ./main.tf to see all of the available MNGs in the cluster
+variable "gameservers_mng_uses_arm_based_instances" {
+  type    = bool
+  default = false
+}
+
 # Default is an m5.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 10 Gbps Network Bandwidth, 4750 Mbps EBS Bandwidth
 # Ensure that all instance types have the same specifications (same cpu and memory amounts) for proper scheduling and scaling
 variable "gameservers_x86_instance_types" {
@@ -60,6 +74,13 @@ variable "gameservers_max_size" {
 variable "gameservers_desired_size" {
   type    = number
   default = 3
+}
+
+# Variable for ensuring that nodes in the agones system Managed Node Group (MNG) use arm-based instances
+# See ./main.tf to see all of the available MNGs in the cluster
+variable "agones_system_mng_uses_arm_based_instances" {
+  type    = bool
+  default = false
 }
 
 # Default is an m5.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 10 Gbps Network Bandwidth, 4750 Mbps EBS Bandwidth
@@ -101,6 +122,13 @@ variable "agones_system_desired_size" {
   default = 1
 }
 
+# Variable for ensuring that nodes in the agones metrics Managed Node Group (MNG) use arm-based instances
+# See ./main.tf to see all of the available MNGs in the cluster
+variable "agones_metrics_mng_uses_arm_based_instances" {
+  type    = bool
+  default = false
+}
+
 # Default is an m5.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 10 Gbps Network Bandwidth, 4750 Mbps EBS Bandwidth
 # Ensure that all instance types have the same specifications (same cpu and memory amounts) for proper scheduling and scaling
 variable "agones_metrics_x86_instance_types" {
@@ -138,6 +166,13 @@ variable "agones_metrics_max_size" {
 variable "agones_metrics_desired_size" {
   type    = number
   default = 1
+}
+
+# Variable for ensuring that nodes in the openmatch Managed Node Group (MNG) use arm-based instances
+# See ./main.tf to see all of the available MNGs in the cluster
+variable "open_match_mng_uses_arm_based_instances" {
+  type    = bool
+  default = false
 }
 
 # Default is an m5.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 10 Gbps Network Bandwidth, 4750 Mbps EBS Bandwidth
@@ -179,26 +214,33 @@ variable "open_match_desired_size" {
   default = 3
 }
 
+# Variable for ensuring that nodes in the agones-openmatch Managed Node Group (MNG) use arm-based instances
+# See ./main.tf to see all of the available MNGs in the cluster
+variable "agones_open_match_mng_uses_arm_based_instances" {
+  type    = bool
+  default = false
+}
+
 # Default is an m5.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 10 Gbps Network Bandwidth, 4750 Mbps EBS Bandwidth
 # Ensure that all instance types have the same specifications (same cpu and memory amounts) for proper scheduling and scaling
-variable "agones_openmatch_x86_instance_types" {
+variable "agones_open_match_x86_instance_types" {
   type    = list(any)
   default = ["m5.large"]
 }
 
 # Default is an m7g.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 12.5 Gbps Network Bandwidth, 10 Gbps EBS Bandwidth
 # Ensure that all instance types have the same specifications (same cpu and memory amounts) for proper scheduling and scaling
-variable "agones_openmatch_arm_instance_types" {
+variable "agones_open_match_arm_instance_types" {
   type    = list(any)
   default = ["m7g.large"]
 }
 
-variable "agones_openmatch_x86_based_ami_type" {
+variable "agones_open_match_x86_based_ami_type" {
   type    = string
   default = "AL2_x86_64"
 }
 
-variable "agones_openmatch_arm_based_ami_type" {
+variable "agones_open_match_arm_based_ami_type" {
   type    = string
   default = "AL2_ARM_64"
 }
@@ -230,9 +272,4 @@ variable "gameserver_maxport" {
 
 variable "open_match" {
   type = bool
-}
-
-variable "use_arm_based_instance_types" {
-  type    = bool
-  default = false
 }

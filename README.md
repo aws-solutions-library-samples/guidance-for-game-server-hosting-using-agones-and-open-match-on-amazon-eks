@@ -109,7 +109,7 @@ For simplicity, we will be using local Terraform state files. In production work
 
 ### terraform/cluster
 
-Run the following commands to create EKS clusters, with the names and regions configured in the previous steps.
+Run the following commands to create EKS clusters with all x86-based instance types, with the names and regions configured in the previous steps. **By default, any Managed Node Group not specified to use arm-based instances will use x86-based instances.**
 ```bash
 # Initialize Terraform
 terraform -chdir=terraform/cluster init &&
@@ -123,6 +123,65 @@ terraform -chdir=terraform/cluster apply -auto-approve \
  -var="cluster_2_cidr=${CIDR2}" \
  -var="cluster_version=${VERSION}"
 ```
+
+Run the following commands to create EKS clusters with **all arm-based instance types.**
+```
+# Initialize Terraform
+terraform -chdir=terraform/cluster init &&
+# Create both clusters
+terraform -chdir=terraform/cluster apply -auto-approve \
+ -var="cluster_1_name=${CLUSTER1}" \
+ -var="cluster_1_region=${REGION1}" \
+ -var="cluster_1_cidr=${CIDR1}" \
+ -var="cluster_2_name=${CLUSTER2}" \
+ -var="cluster_2_region=${REGION2}" \
+ -var="cluster_2_cidr=${CIDR2}" \
+ -var="cluster_version=${VERSION}" \
+ -var="all_arm_based_instances_cluster_1"=true \
+ -var="all_arm_based_instances_cluster_2"=true
+```
+
+Run the following commands to create EKS clusters with **a variety of x86 and arm-based instance types for each Managed Node Group.**
+```
+# Initialize Terraform
+terraform -chdir=terraform/cluster init &&
+# Create both clusters
+terraform -chdir=terraform/cluster apply -auto-approve \
+ -var="cluster_1_name=${CLUSTER1}" \
+ -var="cluster_1_region=${REGION1}" \
+ -var="cluster_1_cidr=${CIDR1}" \
+ -var="cluster_2_name=${CLUSTER2}" \
+ -var="cluster_2_region=${REGION2}" \
+ -var="cluster_2_cidr=${CIDR2}" \
+ -var="cluster_version=${VERSION}" \
+ -var="gameservers_arm_based_instances_cluster_1"=true \
+ -var="gameservers_arm_based_instances_cluster_2"=true \
+ -var="agones_system_arm_based_instances_cluster_1"=true \
+ -var="agones_system_arm_based_instances_cluster_2"=true \
+ -var="agones_metrics_arm_based_instances_cluster_1"=true \
+ -var="agones_metrics_arm_based_instances_cluster_2"=true
+```
+
+Currently, the following list shows all available configurable variables for creating the core EKS cluster through the `terraform -chdir=terraform/cluster apply` command:
+- `cluster_1_name` (string)
+- `cluster_1_region` (string)
+- `cluster_1_cidr` (string)
+- `cluster_2_name` (string)
+- `cluster_2_region` (string)
+- `cluster_2_cidr` (string)
+- `cluster_version` (string)
+- `all_arm_based_instances_cluster_1` (bool)
+- `all_arm_based_instances_cluster_2` (bool)
+- `gameservers_arm_based_instances_cluster_1` (bool)
+- `gameservers_arm_based_instances_cluster_2` (bool)
+- `agones_system_arm_based_instances_cluster_1` (bool)
+- `agones_system_arm_based_instances_cluster_2` (bool)
+- `agones_metrics_arm_based_instances_cluster_1` (bool)
+- `agones_metrics_arm_based_instances_cluster_2` (bool)
+- `open_match_arm_based_instances_cluster_1` (bool)
+- `open_match_arm_based_instances_cluster_2` (bool)
+- `agones_open_match_arm_based_instances_cluster_1` (bool)
+- `agones_open_match_arm_based_instances_cluster_2` (bool)
 
 ### terraform/intra-cluster
 The commands below will deploy our resources inside the clusters created in the last step. We use the output values from `terraform/cluster` as input to the `terraform/intra-cluster` module.
