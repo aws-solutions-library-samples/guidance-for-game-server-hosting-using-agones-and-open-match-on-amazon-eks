@@ -210,13 +210,15 @@ Resources:
 
                 - echo "Reset the root directory"
                 - cd ../..
-            
-                - echo "Get the Open Match frontend load balancer name and ARN"
-                - export FLB_NAME=$(kubectl get services -n open-match -o json | jq -r '.items[] | select(.metadata.name=="open-match-frontend-loadbalancer") | .status.loadBalancer.ingress[0].hostname')
-                - echo "Open Match frontend load balancer name $FLB_NAME"
-                - export FLB_ARN=$(aws elbv2 describe-load-balancers --region us-east-1 | jq -r ".LoadBalancers[] | select(.DNSName==\"$FLB_NAME\") | .LoadBalancerArn")
-                - echo "Open Match frontend load balancer ARN $FLB_ARN"
 
+                - |
+                  echo "Get the Agones allocator load balancer name and ARN"
+                  export FLB_NAME=$(kubectl get service agones-allocator -n agones-system -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+                  echo "Agones allocator load balancer name $FLB_NAME"
+                  export ELB_NAME=$(aws elb describe-load-balancers --region $CLUSTER1_REGION | jq -r '.LoadBalancerDescriptions[] | select(.DNSName == "'$FLB_NAME'") | .LoadBalancerName')
+                  echo "ELB Name: $ELB_NAME"
+                  export FLB_ARN="arn:aws:elasticloadbalancing:${CLUSTER1_REGION}:${AWS_ACCOUNT_ID}:loadbalancer/${ELB_NAME}"
+                  echo "Agones allocator load balancer ARN $FLB_ARN"
 
                 - echo "Get the values needed by Terraform"
                 - export VPC1=$(terraform -chdir=terraform/cluster output -raw vpc_1_id)
@@ -238,7 +240,7 @@ Resources:
                 - echo $ROUTE2
 
                 - export CLUSTER1_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_1_certificate_authority_data)
-                - echo $CLUSTER1_CERTIFICATE_AUTHORITY_DATA             
+                - echo $CLUSTER1_CERTIFICATE_AUTHORITY_DATA
 
                 - export CLUSTER1_TOKEN=$(terraform output -raw cluster_1_token)
                 - echo $CLUSTER1_TOKEN
@@ -251,18 +253,17 @@ Resources:
 
                 - export CLUSTER2_CERTIFICATE_AUTHORITY_DATA=$(terraform output -raw cluster_2_certificate_authority_data)
                 - echo $CLUSTER2_CERTIFICATE_AUTHORITY_DATA
-                
+
                 - export CLUSTER2_TOKEN=$(terraform output -raw cluster_2_token)
                 - echo $CLUSTER2_TOKEN
-                
+
                 - export CLUSTER2_OIDC_PROVIDER_ARN=$(terraform output -raw oidc_provider_2_arn)
                 - echo $CLUSTER2_OIDC_PROVIDER_ARN
 
                 - cd terraform/extra-cluster
                 - terraform init
                 - echo "Run the Terraform command for the extra-cluster"
-                - terraform apply -auto-approve -var="cluster_1_name=${CLUSTER1_NAME}" -var="requester_cidr=${CLUSTER1_CIDR}" -var="requester_vpc_id=${VPC1}" -var="requester_route=${ROUTE1}" -var="cluster_1_gameservers_subnets=${SUBNETS1}" -var="cluster_1_endpoint=${CLUSTER1_ENDPOINT}" -var="cluster_1_certificate_authority_data=${CLUSTER1_CERTIFICATE_AUTHORITY_DATA}" -var="cluster_1_token=${CLUSTER1_TOKEN}" -var="cluster_2_name=${CLUSTER2_NAME}" -var="accepter_cidr=${CLUSTER2_CIDR}" -var="accepter_vpc_id=${VPC2}" -var="accepter_route=${ROUTE2}" -var="cluster_2_gameservers_subnets=${SUBNETS2}" -var="cluster_2_endpoint=${CLUSTER2_ENDPOINT}" -var="cluster_2_certificate_authority_data=${CLUSTER2_CERTIFICATE_AUTHORITY_DATA}" -var="cluster_2_token=${CLUSTER2_TOKEN}" -var="cluster_1_region=${CLUSTER1_REGION}" -var="ecr_region=${CLUSTER1_REGION}" -var="cluster_2_region=${CLUSTER2_REGION}" -var="aws_lb_arn=${FLB_ARN}" 
-
+                - terraform apply -auto-approve -var="cluster_1_name=${CLUSTER1_NAME}" -var="requester_cidr=${CLUSTER1_CIDR}" -var="requester_vpc_id=${VPC1}" -var="requester_route=${ROUTE1}" -var="cluster_1_gameservers_subnets=${SUBNETS1}" -var="cluster_1_endpoint=${CLUSTER1_ENDPOINT}" -var="cluster_1_certificate_authority_data=${CLUSTER1_CERTIFICATE_AUTHORITY_DATA}" -var="cluster_1_token=${CLUSTER1_TOKEN}" -var="cluster_2_name=${CLUSTER2_NAME}" -var="accepter_cidr=${CLUSTER2_CIDR}" -var="accepter_vpc_id=${VPC2}" -var="accepter_route=${ROUTE2}" -var="cluster_2_gameservers_subnets=${SUBNETS2}" -var="cluster_2_endpoint=${CLUSTER2_ENDPOINT}" -var="cluster_2_certificate_authority_data=${CLUSTER2_CERTIFICATE_AUTHORITY_DATA}" -var="cluster_2_token=${CLUSTER2_TOKEN}" -var="cluster_1_region=${CLUSTER1_REGION}" -var="ecr_region=${CLUSTER1_REGION}" -var="cluster_2_region=${CLUSTER2_REGION}" -var="aws_lb_arn=${FLB_ARN}"
 
             post_build:
               commands:
@@ -437,6 +438,116 @@ Resources:
                   - ec2:ModifyInstanceAttribute
                   - ec2:ModifyNetworkInterfaceAttribute
                   - ec2:AssumeRole
+                Resource: "*"            
+              - Effect: Allow
+                Action:
+                  - ecr:CreateRepository
+                  - ecr:DescribeRepositories
+                  - ecr:DescribeRegistry
+                  - ecr:TagResource
+                  - ecr:DescribeImages
+                  - ecr:DescribeImageScanFindings
+                  - ecr:DescribeImageTags
+                  - ecr:GetLifecyclePolicyPreview
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutReplicationConfiguration
+                  - ecr:ListImages
+                  - ecr:DescribeImages
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutReplicationConfiguration
+                  - ecr:ListTagsForResource
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutReplicationConfiguration
+                  - ecr:ListImages
+                  - ecr:DescribeImages
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutReplicationConfiguration
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - globalaccelerator:CreateAccelerator
+                  - globalaccelerator:DeleteAccelerator
+                  - globalaccelerator:DescribeAccelerator
+                  - globalaccelerator:DescribeAcceleratorAttributes
+                  - globalaccelerator:ListAccelerators
+                  - globalaccelerator:UpdateAccelerator
+                  - globalaccelerator:UpdateAcceleratorAttributes
+                  - globalaccelerator:CreateEndpointGroup
+                  - globalaccelerator:DeleteEndpointGroup
+                  - globalaccelerator:DescribeEndpointGroup
+                  - globalaccelerator:UpdateEndpointGroup
+                  - globalaccelerator:CreateListener
+                  - globalaccelerator:DeleteListener
+                  - globalaccelerator:DescribeListener
+                  - globalaccelerator:UpdateListener
+                  - globalaccelerator:ListListeners
+                  - globalaccelerator:CreateCustomRoutingAccelerator
+                  - globalaccelerator:CreateCustomRoutingListener
+                  - globalaccelerator:DeleteCustomRoutingAccelerator
+                  - globalaccelerator:DeleteCustomRoutingListener
+                  - globalaccelerator:DescribeCustomRoutingAccelerator
+                  - globalaccelerator:DescribeCustomRoutingListener
+                  - globalaccelerator:UpdateCustomRoutingAccelerator
+                  - globalaccelerator:UpdateCustomRoutingListener
+                  - globalaccelerator:ListCustomRoutingAccelerators
+                  - globalaccelerator:ListCustomRoutingListeners
+                  - globalaccelerator:ListCustomRoutingPortMappings
+                  - globalaccelerator:ListCustomRoutingPortMappingsByDestination
+                  - globalaccelerator:ListTagsForResource
+                  - globalaccelerator:TagResource
+                  - globalaccelerator:UntagResource
+                  - globalaccelerator:DescribeCustomRoutingAcceleratorAttributes
+                  - globalaccelerator:UpdateCustomRoutingAcceleratorAttributes
+                  - globalaccelerator:CreateCustomRoutingEndpointGroup
+                  - globalaccelerator:DeleteCustomRoutingEndpointGroup
+                  - globalaccelerator:DescribeCustomRoutingEndpointGroup
+                  - globalaccelerator:UpdateCustomRoutingEndpointGroup
+                  - globalaccelerator:ListCustomRoutingEndpointGroups
+                  - globalaccelerator:ListCustomRoutingPortMappings
+                  - globalaccelerator:ListCustomRoutingPortMappingsByDestination
+                  - globalaccelerator:AddCustomRoutingEndpoints
+                  - globalaccelerator:RemoveCustomRoutingEndpoints
+                  - globalaccelerator:DescribeCustomRoutingEndpoint
+                  - globalaccelerator:UpdateCustomRoutingEndpoint
+                  - globalaccelerator:ListCustomRoutingEndpoints
+                  - globalaccelerator:CreateRoutingPosition
+                  - globalaccelerator:DeleteRoutingPosition
+                  - globalaccelerator:DescribeRoutingPosition
+                  - globalaccelerator:UpdateRoutingPosition
+                  - globalaccelerator:ListRoutingPositions
+                  - globalaccelerator:ListRoutingPositionsWithInternalStatus
+                  - globalaccelerator:AllowCustomRoutingTraffic
+                  - globalaccelerator:RemoveCustomRoutingTraffic
+                  - globalaccelerator:ListCustomRoutingTraffic
+                  - globalaccelerator:DescribeCustomRoutingTraffic
+                  - globalaccelerator:UpdateCustomRoutingTraffic
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -499,6 +610,9 @@ Resources:
                   - kms:GetKeyPolicy
                   - kms:PutKeyPolicy
                   - kms:DeleteAlias
+                  - kms:ScheduleKeyDeletion
+                  - kms:DeleteAlias
+                  - kms:DisableKey
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -584,8 +698,6 @@ Resources:
       KeySchema:
         - AttributeName: LockID
           KeyType: HASH
-      SSESpecification:
-        SSEEnabled: true
 
 Outputs:
   CodeBuildProjectName:
