@@ -109,7 +109,11 @@ For simplicity, we will be using local Terraform state files. In production work
 
 ### terraform/cluster
 
-Run the following commands to create EKS clusters with all x86-based instance types, with the names and regions configured in the previous steps. **By default, any Managed Node Group not specified to use arm-based instances will use x86-based instances.**
+**Select one of the options below to deploy the compute components of the EKS Clusters** By default, any Managed Node Group not specified to use arm-based instances will use x86-based instances.
+
+#### Option 1
+
+Run the following commands to create EKS clusters with all x86-based instance types, with the names and regions configured in the previous steps.
 ```bash
 # Initialize Terraform
 terraform -chdir=terraform/cluster init &&
@@ -123,6 +127,9 @@ terraform -chdir=terraform/cluster apply -auto-approve \
  -var="cluster_2_cidr=${CIDR2}" \
  -var="cluster_version=${VERSION}"
 ```
+
+
+#### Option 2
 
 Run the following commands to create EKS clusters with **all arm-based instance types.**
 ```
@@ -141,6 +148,9 @@ terraform -chdir=terraform/cluster apply -auto-approve \
  -var="all_arm_based_instances_cluster_2"=true
 ```
 
+
+#### Option 3
+
 Run the following commands to create EKS clusters with **a variety of x86 and arm-based instance types for each Managed Node Group.**
 ```
 # Initialize Terraform
@@ -158,11 +168,13 @@ terraform -chdir=terraform/cluster apply -auto-approve \
  -var="gameservers_arm_based_instances_cluster_2"=true \
  -var="agones_system_arm_based_instances_cluster_1"=true \
  -var="agones_system_arm_based_instances_cluster_2"=true \
- -var="agones_metrics_arm_based_instances_cluster_1"=true \
- -var="agones_metrics_arm_based_instances_cluster_2"=true
+ -var="agones_metrics_arm_based_instances_cluster_1"=false \
+ -var="agones_metrics_arm_based_instances_cluster_2"=false
 ```
 
-Currently, the following list shows all available configurable variables for creating the core EKS cluster through the `terraform -chdir=terraform/cluster apply` command:
+
+#### Configurable Variables in terraform/cluster creation
+Currently, the following list shows all available configurable variables for creating the compute components of the EKS clusters through the `terraform -chdir=terraform/cluster apply` command:
 - `cluster_1_name` (string)
 - `cluster_1_region` (string)
 - `cluster_1_cidr` (string)
@@ -178,10 +190,7 @@ Currently, the following list shows all available configurable variables for cre
 - `agones_system_arm_based_instances_cluster_2` (bool)
 - `agones_metrics_arm_based_instances_cluster_1` (bool)
 - `agones_metrics_arm_based_instances_cluster_2` (bool)
-- `open_match_arm_based_instances_cluster_1` (bool)
-- `open_match_arm_based_instances_cluster_2` (bool)
-- `agones_open_match_arm_based_instances_cluster_1` (bool)
-- `agones_open_match_arm_based_instances_cluster_2` (bool)
+
 
 ### terraform/intra-cluster
 The commands below will deploy our resources inside the clusters created in the last step. We use the output values from `terraform/cluster` as input to the `terraform/intra-cluster` module.
@@ -218,10 +227,17 @@ terraform -chdir=terraform/intra-cluster apply -auto-approve \
 
 
 ### fetch the load balancer ARN
-Run the commands below to get the ARN of the load balancer deployed in the previous step. The value will be passed as a variable to the next step.
-Set the name of the Load balancer first:
+Run the commands below to get the ARN of the load balancer deployed in the previous step. The value will be passed as a variable to the next step. **Make sure you are using the kubectl context for Cluster 1.**
+
+First, set an environment variable that matches the name of the loadbalancer service. The name can be found by running the `kubectl get services -n open-match` command and looking for the only service of type LoadBalancer.
+```
+OPEN_MATCH_SVC_NAME=$CLUSTER1-om-fe
+```
+Note: If you want to rename the Open Match service then you can do so in the /scripts/configure-open-match-ingress.sh file. Also note that the dashes in the above environment variable setting command help the shell know the end of an environment variable ($CLUSTER1) and the start of a string (-om-fe). Running the command `OPEN_MATCH_SVC_NAME=$CLUSTER1omfe` will not work in setting a new environment variable that concatenates an existing environment variable with a other text.
+
+Next, set the name of the Load balancer:
 ```bash
-FLB_NAME=$(kubectl get services -n open-match -o json | jq -r '.items[] | select(.metadata.name=="open-match-frontend-loadbalancer") | .status.loadBalancer.ingress[0].hostname')
+FLB_NAME=$(kubectl get services -n open-match -o json | jq -r --arg OPEN_MATCH_SVC_NAME "$OPEN_MATCH_SVC_NAME" '.items[] | select(.metadata.name==$OPEN_MATCH_SVC_NAME) | .status.loadBalancer.ingress[0].hostname')
 ```
 Then retrieve the ARN of the load balancer:
 ```bash
@@ -266,7 +282,7 @@ terraform -chdir=terraform/extra-cluster apply -auto-approve \
  -var="cluster_2_token=${TOKEN2}" \
  -var="cluster_1_region=${REGION1}" \
  -var="ecr_region=${REGION1}" \
- -var="cluster_2_region=${REGION2}"
+ -var="cluster_2_region=${REGION2}" \
  -var="aws_lb_arn=${FLB_ARN}"
 
 ```

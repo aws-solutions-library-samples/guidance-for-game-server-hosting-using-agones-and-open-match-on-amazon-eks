@@ -25,12 +25,16 @@ locals {
   agones_metrics_ami_type = ((var.all_mngs_use_arm_based_instance_types == true) || (var.agones_metrics_mng_uses_arm_based_instances == true) ? var.agones_metrics_arm_based_ami_type : var.agones_metrics_x86_based_ami_type)
 
   # open_match instance and ami types
-  open_match_instance_types = ((var.all_mngs_use_arm_based_instance_types == true) || (var.open_match_mng_uses_arm_based_instances == true) ? var.open_match_arm_instance_types : var.open_match_x86_instance_types)
-  open_match_ami_type = ((var.all_mngs_use_arm_based_instance_types == true) || (var.open_match_mng_uses_arm_based_instances == true) ? var.open_match_arm_based_ami_type : var.open_match_x86_based_ami_type)
+  # open_match_instance_types = ((var.all_mngs_use_arm_based_instance_types == true) || (var.open_match_mng_uses_arm_based_instances == true) ? var.open_match_arm_instance_types : var.open_match_x86_instance_types)
+  open_match_instance_types = var.open_match_x86_instance_types
+  # open_match_ami_type = ((var.all_mngs_use_arm_based_instance_types == true) || (var.open_match_mng_uses_arm_based_instances == true) ? var.open_match_arm_based_ami_type : var.open_match_x86_based_ami_type)
+  open_match_ami_type = var.open_match_x86_based_ami_type
 
   # agones_openmatch instance and ami types
-  agones_open_match_instance_types = ((var.all_mngs_use_arm_based_instance_types == true) || (var.agones_open_match_mng_uses_arm_based_instances == true) ? var.agones_open_match_arm_instance_types : var.agones_open_match_x86_instance_types)
-  agones_open_match_ami_type = ((var.all_mngs_use_arm_based_instance_types == true) || (var.agones_open_match_mng_uses_arm_based_instances == true) ? var.agones_open_match_arm_based_ami_type : var.agones_open_match_x86_based_ami_type)
+  # agones_open_match_instance_types = ((var.all_mngs_use_arm_based_instance_types == true) || (var.agones_open_match_mng_uses_arm_based_instances == true) ? var.agones_open_match_arm_instance_types : var.agones_open_match_x86_instance_types)
+  agones_open_match_instance_types = var.agones_open_match_x86_instance_types
+  # agones_open_match_ami_type = ((var.all_mngs_use_arm_based_instance_types == true) || (var.agones_open_match_mng_uses_arm_based_instances == true) ? var.agones_open_match_arm_based_ami_type : var.agones_open_match_x86_based_ami_type)
+  agones_open_match_ami_type = var.agones_open_match_x86_based_ami_type
 }
 
 data "aws_eks_cluster_auth" "this" {

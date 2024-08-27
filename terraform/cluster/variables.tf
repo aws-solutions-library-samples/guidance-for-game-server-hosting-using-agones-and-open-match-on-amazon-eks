@@ -93,28 +93,32 @@ variable "agones_metrics_arm_based_instances_cluster_2" {
 
 # Variable for ensuring that nodes in the openmatch Managed Node Group (MNG) use arm-based instances
 # See ./modules/cluster/main.tf to see all of the available MNGs in the cluster
-variable "open_match_arm_based_instances_cluster_1" {
-  type    = bool
-  default = false
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "open_match_arm_based_instances_cluster_1" {
+#   type    = bool
+#   default = false
+# }
 
 # Variable for ensuring that nodes in the openmatch Managed Node Group (MNG) use arm-based instances
 # See ./modules/cluster/main.tf to see all of the available MNGs in the cluster
-variable "open_match_arm_based_instances_cluster_2" {
-  type    = bool
-  default = false
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "open_match_arm_based_instances_cluster_2" {
+#   type    = bool
+#   default = false
+# }
 
 # Variable for ensuring that nodes in the agones-openmatch Managed Node Group (MNG) use arm-based instances
 # See ./modules/cluster/main.tf to see all of the available MNGs in the cluster
-variable "agones_open_match_arm_based_instances_cluster_1" {
-  type    = bool
-  default = false
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "agones_open_match_arm_based_instances_cluster_1" {
+#   type    = bool
+#   default = false
+# }
 
 # Variable for ensuring that nodes in the agones-openmatch Managed Node Group (MNG) use arm-based instances
 # See ./modules/cluster/main.tf to see all of the available MNGs in the cluster
-variable "agones_open_match_arm_based_instances_cluster_2" {
-  type    = bool
-  default = false
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "agones_open_match_arm_based_instances_cluster_2" {
+#   type    = bool
+#   default = false
+# }

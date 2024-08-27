@@ -170,10 +170,11 @@ variable "agones_metrics_desired_size" {
 
 # Variable for ensuring that nodes in the openmatch Managed Node Group (MNG) use arm-based instances
 # See ./main.tf to see all of the available MNGs in the cluster
-variable "open_match_mng_uses_arm_based_instances" {
-  type    = bool
-  default = false
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "open_match_mng_uses_arm_based_instances" {
+#   type    = bool
+#   default = false
+# }
 
 # Default is an m5.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 10 Gbps Network Bandwidth, 4750 Mbps EBS Bandwidth
 # Ensure that all instance types have the same specifications (same cpu and memory amounts) for proper scheduling and scaling
@@ -184,20 +185,22 @@ variable "open_match_x86_instance_types" {
 
 # Default is an m7g.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 12.5 Gbps Network Bandwidth, 10 Gbps EBS Bandwidth
 # Ensure that all instance types have the same specifications (same cpu and memory amounts) for proper scheduling and scaling
-variable "open_match_arm_instance_types" {
-  type    = list(any)
-  default = ["m7g.large"]
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "open_match_arm_instance_types" {
+#   type    = list(any)
+#   default = ["m7g.large"]
+# }
 
 variable "open_match_x86_based_ami_type" {
   type    = string
   default = "AL2_x86_64"
 }
 
-variable "open_match_arm_based_ami_type" {
-  type    = string
-  default = "AL2_ARM_64"
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "open_match_arm_based_ami_type" {
+#   type    = string
+#   default = "AL2_ARM_64"
+# }
 
 variable "open_match_min_size" {
   type    = number
@@ -216,10 +219,11 @@ variable "open_match_desired_size" {
 
 # Variable for ensuring that nodes in the agones-openmatch Managed Node Group (MNG) use arm-based instances
 # See ./main.tf to see all of the available MNGs in the cluster
-variable "agones_open_match_mng_uses_arm_based_instances" {
-  type    = bool
-  default = false
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "agones_open_match_mng_uses_arm_based_instances" {
+#   type    = bool
+#   default = false
+# }
 
 # Default is an m5.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 10 Gbps Network Bandwidth, 4750 Mbps EBS Bandwidth
 # Ensure that all instance types have the same specifications (same cpu and memory amounts) for proper scheduling and scaling
@@ -230,20 +234,22 @@ variable "agones_open_match_x86_instance_types" {
 
 # Default is an m7g.large instance type: 2 vCPU, 8 GB Memory, EBS-Only Instance Storage, 12.5 Gbps Network Bandwidth, 10 Gbps EBS Bandwidth
 # Ensure that all instance types have the same specifications (same cpu and memory amounts) for proper scheduling and scaling
-variable "agones_open_match_arm_instance_types" {
-  type    = list(any)
-  default = ["m7g.large"]
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "agones_open_match_arm_instance_types" {
+#   type    = list(any)
+#   default = ["m7g.large"]
+# }
 
 variable "agones_open_match_x86_based_ami_type" {
   type    = string
   default = "AL2_x86_64"
 }
 
-variable "agones_open_match_arm_based_ami_type" {
-  type    = string
-  default = "AL2_ARM_64"
-}
+# AS OF 8-21-2024, OPENMATCH DOES NOT SUPPORT ARM-BASED ARCHITECTURES
+# variable "agones_open_match_arm_based_ami_type" {
+#   type    = string
+#   default = "AL2_ARM_64"
+# }
 
 variable "agones_openmatch_min_size" {
   type    = number

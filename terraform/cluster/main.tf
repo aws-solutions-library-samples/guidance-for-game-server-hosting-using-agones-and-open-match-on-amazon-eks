@@ -10,8 +10,6 @@ module "cluster1" {
   gameservers_mng_uses_arm_based_instances      = var.gameservers_arm_based_instances_cluster_1
   agones_system_mng_uses_arm_based_instances    = var.agones_system_arm_based_instances_cluster_1
   agones_metrics_mng_uses_arm_based_instances   = var.agones_metrics_arm_based_instances_cluster_1
-  open_match_mng_uses_arm_based_instances        = var.open_match_arm_based_instances_cluster_1
-  agones_open_match_mng_uses_arm_based_instances = var.agones_open_match_arm_based_instances_cluster_1
 }
 module "cluster2" {
   source                                        = "./modules/cluster"
@@ -23,8 +21,6 @@ module "cluster2" {
   gameservers_mng_uses_arm_based_instances      = var.gameservers_arm_based_instances_cluster_2
   agones_system_mng_uses_arm_based_instances    = var.agones_system_arm_based_instances_cluster_2
   agones_metrics_mng_uses_arm_based_instances   = var.agones_metrics_arm_based_instances_cluster_2
-  open_match_mng_uses_arm_based_instances        = var.open_match_arm_based_instances_cluster_2
-  agones_open_match_mng_uses_arm_based_instances = var.agones_open_match_arm_based_instances_cluster_2
 }
 #--------------------------------------------------------------
 # Adding guidance solution ID via AWS CloudFormation resource
