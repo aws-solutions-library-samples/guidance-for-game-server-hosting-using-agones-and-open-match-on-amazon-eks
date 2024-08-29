@@ -106,6 +106,7 @@ Resources:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_LARGE
         Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        PrivilegedMode: true
         EnvironmentVariables:
           - Name: TERRAFORM_STATE_BUCKET
             Type: PLAINTEXT
@@ -297,7 +298,21 @@ Resources:
                     -var="aws_lb_arn=${FLB_ARN}"
 
                 - echo "Capturing Terraform output"
-                - terraform -chdir=terraform/extra-cluster output > terraform_output.txt    
+                - terraform -chdir=terraform/extra-cluster output > terraform_output.txt 
+
+                - echo "Building and deploying game server fleets..."
+                - |
+                  chmod +x scripts/deploy-ncat-fleets.sh
+                  sh scripts/deploy-ncat-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2}  
+
+                - echo "Integrating Open Match with Agones..."
+                - |
+                  cd $CODEBUILD_SRC_DIR
+                  kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
+                  sh scripts/deploy-matchfunction.sh ${CLUSTER1} ${REGION1}
+                  sh scripts/deploy-director.sh ${CLUSTER1} ${REGION1} ${REGION2}
+                  kubectl get pods -n agones-openmatch
+                - echo "Open Match integration with Agones completed."
 
             post_build:
               commands:
@@ -479,6 +494,7 @@ Resources:
                 Resource: "*"            
               - Effect: Allow
                 Action:
+                  - ecr:GetAuthorizationToken
                   - ecr:CreateRepository
                   - ecr:DescribeRepositories
                   - ecr:DescribeRegistry
@@ -495,38 +511,8 @@ Resources:
                   - ecr:CompleteLayerUpload
                   - ecr:PutReplicationConfiguration
                   - ecr:ListImages
-                  - ecr:DescribeImages
                   - ecr:BatchCheckLayerAvailability
-                  - ecr:GetDownloadUrlForLayer
-                  - ecr:BatchGetImage
-                  - ecr:PutImage
-                  - ecr:InitiateLayerUpload
-                  - ecr:UploadLayerPart
-                  - ecr:CompleteLayerUpload
-                  - ecr:PutReplicationConfiguration
                   - ecr:ListTagsForResource
-                  - ecr:PutImage
-                  - ecr:InitiateLayerUpload
-                  - ecr:UploadLayerPart
-                  - ecr:CompleteLayerUpload
-                  - ecr:BatchCheckLayerAvailability
-                  - ecr:GetDownloadUrlForLayer
-                  - ecr:BatchGetImage
-                  - ecr:PutImage
-                  - ecr:InitiateLayerUpload
-                  - ecr:UploadLayerPart
-                  - ecr:CompleteLayerUpload
-                  - ecr:PutReplicationConfiguration
-                  - ecr:ListImages
-                  - ecr:DescribeImages
-                  - ecr:BatchCheckLayerAvailability
-                  - ecr:GetDownloadUrlForLayer
-                  - ecr:BatchGetImage
-                  - ecr:PutImage
-                  - ecr:InitiateLayerUpload
-                  - ecr:UploadLayerPart
-                  - ecr:CompleteLayerUpload
-                  - ecr:PutReplicationConfiguration
                 Resource: "*"
               - Effect: Allow
                 Action:
