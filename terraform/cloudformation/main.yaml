@@ -113,6 +113,8 @@ Resources:
             Value: !Ref TerraformStateBucket
           - Name: TERRAFORM_DYNAMO_TABLE
             Value: !Ref TerraformDynamoDBLockTable
+          - Name: TF_STATE_KEY
+            Value: terraform.tfstate
           - Name: CLUSTER1
             Value: !Ref Cluster1Name
           - Name: REGION1
@@ -185,7 +187,13 @@ Resources:
             build:
               commands:
                 - echo "Initializing Terraform for cluster creation..."
-                - terraform -chdir=terraform/cluster init
+                - |
+                  terraform -chdir=terraform/cluster init \
+                    -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+                    -backend-config="key=${TF_STATE_KEY}" \
+                    -backend-config="region=${AWS_REGION}" \
+                    -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}" \
+                    -backend-config="encrypt=true"
 
                 - echo "Creating both clusters..."
                 - |
@@ -201,7 +209,13 @@ Resources:
 
                 - echo "Step 2 - Terraform Intra-Cluster"
                 - echo "Initializing Terraform for intra-cluster configuration..."
-                - terraform -chdir=terraform/intra-cluster init
+                - |
+                  terraform -chdir=terraform/intra-cluster init \
+                    -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+                    -backend-config="key=intra-cluster-${TF_STATE_KEY}" \
+                    -backend-config="region=${AWS_REGION}" \
+                    -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}" \
+                    -backend-config="encrypt=true"
 
                 - echo "Deploying to the first cluster (${CLUSTER1})..."
                 - |
@@ -257,7 +271,13 @@ Resources:
                 - echo "FLB_ARN=$FLB_ARN"
 
                 - echo "Initializing Terraform for extra-cluster configuration"
-                - terraform -chdir=terraform/extra-cluster init
+                - |
+                  terraform -chdir=terraform/extra-cluster init \
+                    -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+                    -backend-config="key=extra-cluster-${TF_STATE_KEY}" \
+                    -backend-config="region=${AWS_REGION}" \
+                    -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}" \
+                    -backend-config="encrypt=true"
 
                 - echo "Getting values needed by Terraform"
                 - export VPC1=$(terraform -chdir=terraform/cluster output -raw vpc_1_id)
@@ -623,21 +643,30 @@ Resources:
                   - iam:TagOpenIDConnectProvider
                   - iam:GetOpenIDConnectProvider
                   - iam:DeleteOpenIDConnectProvider 
+                  - iam:UpdateAssumeRolePolicy
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - kms:CreateKey
-                  - kms:CreateAlias
-                  - kms:TagResource
-                  - kms:ListAliases
-                  - kms:DescribeKey
-                  - kms:GetKeyPolicy
-                  - kms:PutKeyPolicy
-                  - kms:DeleteAlias
+                  - kms:Create*
+                  - kms:Describe*
+                  - kms:Enable*
+                  - kms:List*
+                  - kms:Put*
+                  - kms:Update*
+                  - kms:Revoke*
+                  - kms:Disable*
+                  - kms:Get*
+                  - kms:Delete*
                   - kms:ScheduleKeyDeletion
-                  - kms:DeleteAlias
-                  - kms:DisableKey
+                  - kms:CancelKeyDeletion
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - kms:*
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    kms:CallerAccount: !Ref AWS::AccountId
               - Effect: Allow
                 Action:
                   - cloudformation:CreateStack
@@ -667,6 +696,17 @@ Resources:
                 Resource:
                   - !GetAtt CodeBuildArtifactsBucket.Arn
                   - !Sub ${CodeBuildArtifactsBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !GetAtt TerraformStateBucket.Arn
+                  - !Sub ${TerraformStateBucket.Arn}/*
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
