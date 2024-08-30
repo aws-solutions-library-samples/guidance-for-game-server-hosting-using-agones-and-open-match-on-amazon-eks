@@ -340,7 +340,150 @@ Resources:
                 - echo "Terraform Output:"
                 - cat terraform_output.txt
                 - echo "Global Accelerator Address:"
-                - grep "global_accelerator_address" terraform_output.txt | cut -d '=' -f2 | tr -d ' "'   
+                - grep "global_accelerator_address" terraform_output.txt | cut -d '=' -f2 | tr -d ' "'
+
+  CleanupCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub AGOE-Cleanup-${AWS::AccountId}-${AWS::Region}
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_LARGE
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: TERRAFORM_STATE_BUCKET
+            Type: PLAINTEXT
+            Value: !Ref TerraformStateBucket
+          - Name: TERRAFORM_DYNAMO_TABLE
+            Value: !Ref TerraformDynamoDBLockTable
+          - Name: CLUSTER1
+            Value: !Ref Cluster1Name
+          - Name: REGION1
+            Value: !Ref Cluster1Region
+          - Name: CLUSTER2
+            Value: !Ref Cluster2Name
+          - Name: REGION2
+            Value: !Ref Cluster2Region
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Source:        
+        Type: GITHUB
+        Location: !Ref RepositoryLocation
+        BuildSpec: |
+          version: 0.2
+
+          env:
+            variables:
+              TERRAFORM_STATE_BUCKET: ${TERRAFORM_STATE_BUCKET}
+              TERRAFORM_DYNAMO_TABLE: ${TERRAFORM_DYNAMO_TABLE}
+              TF_STATE_KEY: terraform.tfstate
+              CLUSTER1: ${CLUSTER1}
+              REGION1: ${REGION1}
+              CIDR1: ${CIDR1}
+              CLUSTER2: ${CLUSTER2}
+              REGION2: ${REGION2}
+              CIDR2: ${CIDR2}
+              VERSION: ${VERSION}
+
+          phases:
+            install:
+              commands:
+                - echo Installing dependencies...
+                - yum update -y
+                - yum install -y yum-utils
+                - yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+                - yum -y install terraform
+                - terraform --version
+
+            build:
+              commands:
+                - echo "Starting cleanup process..."
+                
+                - echo "Destroying extra-cluster resources"
+                - |
+                  terraform -chdir=terraform/extra-cluster init \
+                    -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+                    -backend-config="key=extra-cluster-${TF_STATE_KEY}" \
+                    -backend-config="region=${AWS_REGION}" \
+                    -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}"
+                - |
+                  terraform -chdir=terraform/extra-cluster destroy -auto-approve \
+                    -var="cluster_1_name=${CLUSTER1}" \
+                    -var="requester_cidr=${CIDR1}" \
+                    -var="requester_vpc_id=${VPC1}" \
+                    -var="requester_route=${ROUTE1}" \
+                    -var="cluster_1_gameservers_subnets=${SUBNETS1}" \
+                    -var="cluster_1_endpoint=${ENDPOINT1}" \
+                    -var="cluster_1_certificate_authority_data=${AUTH1}" \
+                    -var="cluster_1_token=${TOKEN1}" \
+                    -var="cluster_2_name=${CLUSTER2}" \
+                    -var="accepter_cidr=${CIDR2}" \
+                    -var="accepter_vpc_id=${VPC2}" \
+                    -var="accepter_route=${ROUTE2}" \
+                    -var="cluster_2_gameservers_subnets=${SUBNETS2}" \
+                    -var="cluster_2_endpoint=${ENDPOINT2}" \
+                    -var="cluster_2_certificate_authority_data=${AUTH2}" \
+                    -var="cluster_2_token=${TOKEN2}" \
+                    -var="cluster_1_region=${REGION1}" \
+                    -var="ecr_region=${REGION1}" \
+                    -var="cluster_2_region=${REGION2}"
+                
+                - echo "Destroying intra-cluster resources for both clusters"
+                - |
+                  terraform -chdir=terraform/intra-cluster init \
+                    -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+                    -backend-config="key=intra-cluster-${TF_STATE_KEY}" \
+                    -backend-config="region=${AWS_REGION}" \
+                    -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}"
+                - |
+                  terraform -chdir=terraform/intra-cluster workspace select ${REGION1}
+                  terraform -chdir=terraform/intra-cluster destroy -auto-approve \
+                    -var="cluster_name=${CLUSTER1}" \
+                    -var="cluster_region=${REGION1}" \
+                    -var="cluster_endpoint=${ENDPOINT1}" \
+                    -var="cluster_certificate_authority_data=${AUTH1}" \
+                    -var="cluster_token=${TOKEN1}" \
+                    -var="cluster_version=${VERSION}" \
+                    -var="oidc_provider_arn=${OIDC_PROVIDER_1_ARN}" \
+                    -var="namespaces=[\"agones-openmatch\", \"agones-system\", \"gameservers\", \"open-match\"]" \
+                    -var="configure_agones=true" \
+                    -var="configure_open_match=true"
+                - |
+                  terraform -chdir=terraform/intra-cluster workspace select ${REGION2}
+                  terraform -chdir=terraform/intra-cluster destroy -auto-approve \
+                    -var="cluster_name=${CLUSTER2}" \
+                    -var="cluster_region=${REGION2}" \
+                    -var="cluster_endpoint=${ENDPOINT2}" \
+                    -var="cluster_certificate_authority_data=${AUTH2}" \
+                    -var="cluster_token=${TOKEN2}" \
+                    -var="cluster_version=${VERSION}" \
+                    -var="oidc_provider_arn=${OIDC_PROVIDER_2_ARN}" \
+                    -var="namespaces=[\"agones-system\", \"gameservers\"]" \
+                    -var="configure_agones=true" \
+                    -var="configure_open_match=false"
+                
+                - echo "Destroying the clusters"
+                - |
+                  terraform -chdir=terraform/cluster init \
+                    -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+                    -backend-config="key=${TF_STATE_KEY}" \
+                    -backend-config="region=${AWS_REGION}" \
+                    -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}"
+                - |
+                  terraform -chdir=terraform/cluster destroy -auto-approve \
+                    -var="cluster_1_name=${CLUSTER1}" \
+                    -var="cluster_1_region=${REGION1}" \
+                    -var="cluster_1_cidr=${CIDR1}" \
+                    -var="cluster_2_name=${CLUSTER2}" \
+                    -var="cluster_2_region=${REGION2}" \
+                    -var="cluster_2_cidr=${CIDR2}" \
+                    -var="cluster_version=${VERSION}"
+
+            post_build:
+              commands:
+                - echo "Cleanup completed on $(date)"
 
   CodeBuildArtifactsBucket:
     Type: AWS::S3::Bucket
@@ -412,6 +555,28 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildProject
                 PrimarySource: AdminSourceArtifact
+        - Name: Approval
+          Actions:
+            - Name: ManualApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              RunOrder: 1
+        - Name: Cleanup
+          Actions:
+            - Name: CleanupAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref CleanupCodeBuildProject
+              RunOrder: 1
+              InputArtifacts:
+                - Name: AdminSourceArtifact
 
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
@@ -511,7 +676,14 @@ Resources:
                   - ec2:ModifyInstanceAttribute
                   - ec2:ModifyNetworkInterfaceAttribute
                   - ec2:AssumeRole
-                Resource: "*"            
+                  - ec2:DeleteVpc
+                  - ec2:DeleteSubnet
+                  - ec2:DeleteRouteTable
+                  - ec2:DeleteInternetGateway
+                  - ec2:DetachInternetGateway
+                  - ec2:DeleteNatGateway
+                  - ec2:ReleaseAddress
+                Resource: "*"
               - Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
@@ -601,9 +773,9 @@ Resources:
                   - eks:UpdateClusterConfig
                   - eks:DeleteCluster
                   - eks:TagResource
-                  - eks:CreateNodegroup 
+                  - eks:CreateNodegroup
                   - eks:DescribeNodegroup
-                  - eks:DeleteNodegroup 
+                  - eks:DeleteNodegroup
                   - eks:ListClusters
                   - eks:DescribeAddon
                   - eks:DescribeAddonVersions
@@ -642,7 +814,7 @@ Resources:
                   - iam:CreateOpenIDConnectProvider
                   - iam:TagOpenIDConnectProvider
                   - iam:GetOpenIDConnectProvider
-                  - iam:DeleteOpenIDConnectProvider 
+                  - iam:DeleteOpenIDConnectProvider
                   - iam:UpdateAssumeRolePolicy
                 Resource: "*"
               - Effect: Allow
@@ -775,3 +947,7 @@ Outputs:
   TerraformDynamoDBLockTableName:
     Description: Name of the DynamoDB Table
     Value: !Ref TerraformDynamoDBLockTable
+
+  CleanupBuildProject:
+    Description: CodeBuild project for cleaning up resources
+    Value: !Ref CleanupCodeBuildProject
