@@ -1,7 +1,7 @@
 ## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 ## SPDX-License-Identifier: MIT-0
 
-FROM public.ecr.aws/docker/library/golang:1.21.4-alpine3.18 as go
+FROM public.ecr.aws/docker/library/golang:1.21.4-alpine3.18 AS go
 RUN apk add git
 WORKDIR /app
 ENV GO111MODULE=on

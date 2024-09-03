@@ -113,7 +113,7 @@ For simplicity, we will be using local Terraform state files. In production work
 
 #### Option 1
 
-Run the following commands to create EKS clusters with all x86-based instance types, with the names and regions configured in the previous steps.
+Run the following commands to create EKS clusters with **all x86-based instance types,** with the names and regions configured in the previous steps.
 ```bash
 # Initialize Terraform
 terraform -chdir=terraform/cluster init &&
@@ -191,6 +191,7 @@ Currently, the following list shows all available configurable variables for cre
 - `agones_metrics_arm_based_instances_cluster_1` (bool)
 - `agones_metrics_arm_based_instances_cluster_2` (bool)
 
+Unfortunately, open match does not have an arm-based container image. Hence why the managed node groups that help run openmatch are not available for configuration.
 
 ### terraform/intra-cluster
 The commands below will deploy our resources inside the clusters created in the last step. We use the output values from `terraform/cluster` as input to the `terraform/intra-cluster` module.
@@ -227,13 +228,18 @@ terraform -chdir=terraform/intra-cluster apply -auto-approve \
 
 
 ### fetch the load balancer ARN
-Run the commands below to get the ARN of the load balancer deployed in the previous step. The value will be passed as a variable to the next step. **Make sure you are using the kubectl context for Cluster 1.**
+Run the commands below to get the ARN of the load balancer deployed in the previous step. The value will be passed as a variable to the next step.
 
 First, set an environment variable that matches the name of the loadbalancer service. The name can be found by running the `kubectl get services -n open-match` command and looking for the only service of type LoadBalancer.
 ```
 OPEN_MATCH_SVC_NAME=$CLUSTER1-om-fe
 ```
 Note: If you want to rename the Open Match service then you can do so in the /scripts/configure-open-match-ingress.sh file. Also note that the dashes in the above environment variable setting command help the shell know the end of an environment variable ($CLUSTER1) and the start of a string (-om-fe). Running the command `OPEN_MATCH_SVC_NAME=$CLUSTER1omfe` will not work in setting a new environment variable that concatenates an existing environment variable with a other text.
+
+#### Ensure that your kubectl context is set to the correct context for Cluster 1 before executing the next two commands.
+```bash
+kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
+```
 
 Next, set the name of the Load balancer:
 ```bash
@@ -307,10 +313,16 @@ We will use the ncat-server deployment to test the Open Match matchmaking.
 
 **Note: Verify that Docker is running before the next steps.**
 
-Use the command below to build the image, push it to the ECR repository, and deploy 4 fleets of ncat game servers on each cluster. 
+Use one of the below commands to build the image, push it to the ECR repository, and deploy 4 fleets of ncat game servers on each cluster. 
 
+#### X86-based nodes in the gameservers managed node group
 ```bash
-sh scripts/deploy-ncat-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2}
+sh scripts/deploy-ncat-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2} amd64
+```
+
+#### arm-based nodes in the gameservers managed node group
+```bash
+sh scripts/deploy-ncat-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2} arm64
 ```
 
 ## Integrate Open Match with Agones
@@ -409,7 +421,7 @@ again, before starting the clients with new values.
 We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in [integration/clients/stk/](integration/clients/stk/) to test the SuperTuxKart integration with Open Match and Agones, similarly to our ncat example above. Please, refer to the [README.md](integration/clients/stk/README.md) in the stk folder for more instructions.
 
 ## Clean Up Resources
-
+Note: If you run the below command in a new terminal that no longer retains the necessary environment variables then please reset the necessary environment variables by running 1) running the initial environment variable-setting command at the beginning of this walkthrough, and 2) run the environment variable-setting commands present in the terraform/extra-cluster create command.
 
 - Destroy the extra clusters components
     ```bash
@@ -432,7 +444,8 @@ We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in
      -var="cluster_2_token=${TOKEN2}" \
      -var="cluster_1_region=${REGION1}" \
      -var="ecr_region=${REGION1}" \
-     -var="cluster_2_region=${REGION2}"
+     -var="cluster_2_region=${REGION2}" \
+     -var="aws_lb_arn=${FLB_ARN}"
     ``` 
 
 - Delete the Load Balancers and Security Groups

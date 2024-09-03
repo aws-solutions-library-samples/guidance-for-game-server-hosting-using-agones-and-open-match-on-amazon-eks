@@ -5,6 +5,15 @@
 Running log of recent changes, on a git commit level. The purpose of this document is to provide more details about changes to the project without having overly verbose commit messages.
 
 # Change Log
+## 9-2-2024
+**TLDR;** Modified ncat gameservers to have the ability to run with arm-based containers. Made ECR repos mutable. Added arm-arch node affinity to /integration/director/director.yaml and /integration/matchfunction/matchfunction.yaml.
+
+- Modified the /scripts/deploy-ncat-fleets.sh file to be able to build ncat servers for the linux/arm64 platform. The deployer can specify which architecture to use in the script by running the command found in the README.md file.
+- Set the agones-openmatch-ncat-server ECR repository to be mutable for the scripts/deploy-ncat-fleets.sh script to push the correct images to the repository. There was an error with the script trying to push an image to the repository when it was first created. The change permits the solution to upload an image index artifact to ECR. Otherwise, only the image gets uploaded. This does open things up for people to push editions of the same version/tag of an image in an image repository.
+- Added node affinity for matchfunction and director yaml files in integration/director and integration.matchfunction directories. The node affinity assigns the pods to x86-based nodes.
+- Updated the README.md file to have more efficient deletion commands and clearer instructions when choosing between arm-based and x86-based instance architectures.
+
+
 ## 8-27-2024
 **TLDR;** Improved the readability of the terraform/cluster section of the README.md file. Improved the markdown formatting of the CHANGELOG_README.md file. Removed functionality for deploying arm-based nodes for openmatch. Fluentbit now creates whatever CloudWatch Log Groups it needs upon deployment. Fixed the README.md file's instructions for fetching the load balancer arn.
 
