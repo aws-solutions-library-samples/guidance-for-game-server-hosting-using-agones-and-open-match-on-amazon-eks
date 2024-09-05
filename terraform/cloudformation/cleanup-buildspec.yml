@@ -1,0 +1,112 @@
+version: 0.2
+
+env:
+  variables:
+    TERRAFORM_STATE_BUCKET: ${TERRAFORM_STATE_BUCKET}
+    TERRAFORM_DYNAMO_TABLE: ${TERRAFORM_DYNAMO_TABLE}
+    TF_STATE_KEY: terraform.tfstate
+    CLUSTER1: ${CLUSTER1}
+    REGION1: ${REGION1}
+    CIDR1: ${CIDR1}
+    CLUSTER2: ${CLUSTER2}
+    REGION2: ${REGION2}
+    CIDR2: ${CIDR2}
+    VERSION: ${VERSION}
+
+phases:
+  install:
+    commands:
+      - echo Installing dependencies...
+      - yum update -y
+      - yum install -y yum-utils
+      - yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+      - yum -y install terraform
+      - terraform --version
+
+  build:
+    commands:
+      - echo "Starting cleanup process..."
+
+      - echo "Destroying extra-cluster resources"
+      - |
+        terraform -chdir=terraform/extra-cluster init \
+          -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+          -backend-config="key=extra-cluster-${TF_STATE_KEY}" \
+          -backend-config="region=${AWS_REGION}" \
+          -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}"
+      - |
+        terraform -chdir=terraform/extra-cluster destroy -auto-approve \
+          -var="cluster_1_name=${CLUSTER1}" \
+          -var="requester_cidr=${CIDR1}" \
+          -var="requester_vpc_id=${VPC1}" \
+          -var="requester_route=${ROUTE1}" \
+          -var="cluster_1_gameservers_subnets=${SUBNETS1}" \
+          -var="cluster_1_endpoint=${ENDPOINT1}" \
+          -var="cluster_1_certificate_authority_data=${AUTH1}" \
+          -var="cluster_1_token=${TOKEN1}" \
+          -var="cluster_2_name=${CLUSTER2}" \
+          -var="accepter_cidr=${CIDR2}" \
+          -var="accepter_vpc_id=${VPC2}" \
+          -var="accepter_route=${ROUTE2}" \
+          -var="cluster_2_gameservers_subnets=${SUBNETS2}" \
+          -var="cluster_2_endpoint=${ENDPOINT2}" \
+          -var="cluster_2_certificate_authority_data=${AUTH2}" \
+          -var="cluster_2_token=${TOKEN2}" \
+          -var="cluster_1_region=${REGION1}" \
+          -var="ecr_region=${REGION1}" \
+          -var="cluster_2_region=${REGION2}"
+
+      - echo "Destroying intra-cluster resources for both clusters"
+      - |
+        terraform -chdir=terraform/intra-cluster init \
+          -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+          -backend-config="key=intra-cluster-${TF_STATE_KEY}" \
+          -backend-config="region=${AWS_REGION}" \
+          -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}"
+      - |
+        terraform -chdir=terraform/intra-cluster workspace select ${REGION1}
+        terraform -chdir=terraform/intra-cluster destroy -auto-approve \
+          -var="cluster_name=${CLUSTER1}" \
+          -var="cluster_region=${REGION1}" \
+          -var="cluster_endpoint=${ENDPOINT1}" \
+          -var="cluster_certificate_authority_data=${AUTH1}" \
+          -var="cluster_token=${TOKEN1}" \
+          -var="cluster_version=${VERSION}" \
+          -var="oidc_provider_arn=${OIDC_PROVIDER_1_ARN}" \
+          -var="namespaces=[\"agones-openmatch\", \"agones-system\", \"gameservers\", \"open-match\"]" \
+          -var="configure_agones=true" \
+          -var="configure_open_match=true"
+      - |
+        terraform -chdir=terraform/intra-cluster workspace select ${REGION2}
+        terraform -chdir=terraform/intra-cluster destroy -auto-approve \
+          -var="cluster_name=${CLUSTER2}" \
+          -var="cluster_region=${REGION2}" \
+          -var="cluster_endpoint=${ENDPOINT2}" \
+          -var="cluster_certificate_authority_data=${AUTH2}" \
+          -var="cluster_token=${TOKEN2}" \
+          -var="cluster_version=${VERSION}" \
+          -var="oidc_provider_arn=${OIDC_PROVIDER_2_ARN}" \
+          -var="namespaces=[\"agones-system\", \"gameservers\"]" \
+          -var="configure_agones=true" \
+          -var="configure_open_match=false"
+
+      - echo "Destroying the clusters"
+      - |
+        terraform -chdir=terraform/cluster init \
+          -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+          -backend-config="key=${TF_STATE_KEY}" \
+          -backend-config="region=${AWS_REGION}" \
+          -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}"
+      - |
+        terraform -chdir=terraform/cluster destroy -auto-approve \
+          -var="cluster_1_name=${CLUSTER1}" \
+          -var="cluster_1_region=${REGION1}" \
+          -var="cluster_1_cidr=${CIDR1}" \
+          -var="cluster_2_name=${CLUSTER2}" \
+          -var="cluster_2_region=${REGION2}" \
+          -var="cluster_2_cidr=${CIDR2}" \
+          -var="cluster_version=${VERSION}"
+
+  post_build:
+    commands:
+      - echo "Cleanup completed on $(date)"
