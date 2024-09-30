@@ -17,6 +17,7 @@ Metadata:
           - Cluster2Region
           - Cluster2CIDR
           - KubernetesVersion
+          - AdminRoleArn
     ParameterLabels:
       VpcCIDR:
         default: "AGOE VPC CIDR"
@@ -44,6 +45,8 @@ Metadata:
         default: "AGOE Repository Owner"
       RepositoryName:
         default: "AGOE Repository Name"
+      AdminRoleArn:
+        default: "AGOE Admin Role ARN"
 
 Parameters:
   VpcCIDR:
@@ -93,6 +96,10 @@ Parameters:
     Type: String
     Default: guidance-for-game-server-hosting-using-agones-and-open-match-on-amazon-eks
     Description: The name of the Git repository
+  AdminRoleArn:
+    Type: String
+    Description: The ARN of the admin role (optional)
+    Default: ""
 
 Resources:
   CodeBuildProject:
@@ -129,6 +136,8 @@ Resources:
             Value: !Ref Cluster2CIDR
           - Name: VERSION
             Value: !Ref KubernetesVersion
+          - Name: ADMIN_ROLE_ARN
+            Value: !Ref AdminRoleArn
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Source:
         Type: GITHUB

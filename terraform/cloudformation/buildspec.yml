@@ -69,6 +69,7 @@ phases:
           -var="cluster_2_region=${REGION2}" \
           -var="cluster_2_cidr=${CIDR2}" \
           -var="cluster_version=${VERSION}"
+          -var="admin_role_arn=${ADMIN_ROLE_ARN}"  # Pass the optional admin role ARN
 
       - echo "Step 2 - Terraform Intra-Cluster"
       - echo "Initializing Terraform for intra-cluster configuration..."

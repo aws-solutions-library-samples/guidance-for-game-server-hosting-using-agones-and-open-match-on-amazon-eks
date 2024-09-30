@@ -205,7 +205,10 @@ module "eks_blueprints_admin_team" {
   name = "admin-team"
 
   enable_admin = true
-  users        = [data.aws_caller_identity.current.arn]
+  users = concat(
+    [data.aws_caller_identity.current.arn],  # Always included
+    var.additional_admin_arn != "" ? [var.additional_admin_arn] : []  # Conditionally included
+  )
   cluster_arn  = module.eks.cluster_arn
 
   tags = local.tags
@@ -230,4 +233,10 @@ resource "null_resource" "kubectl" {
   provisioner "local-exec" {
     command = "aws eks --region ${var.cluster_region}  update-kubeconfig --name ${var.cluster_name}"
   }
+}
+
+variable "additional_admin_arn" {
+  description = "ARN of an additional admin (optional)"
+  type        = string
+  default     = ""  # Set a default value if needed
 }
