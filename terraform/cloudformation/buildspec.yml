@@ -68,8 +68,8 @@ phases:
           -var="cluster_2_name=${CLUSTER2}" \
           -var="cluster_2_region=${REGION2}" \
           -var="cluster_2_cidr=${CIDR2}" \
-          -var="cluster_version=${VERSION}"
-          -var="admin_role_arn=${ADMIN_ROLE_ARN}"  # Pass the optional admin role ARN
+          -var="cluster_version=${VERSION}" \
+          -var="admin_role_arn=${ADMIN_ROLE_ARN}"
 
       - echo "Step 2 - Terraform Intra-Cluster"
       - echo "Initializing Terraform for intra-cluster configuration..."
@@ -200,6 +200,6 @@ phases:
     commands:
       - echo "Build completed on $(date)"
       - echo "Terraform Output:"
-      - cat terraform_output.txt
+      - cat terraform_output.txt || echo "No terraform_output.txt file found"
       - echo "Global Accelerator Address:"
-      - grep "global_accelerator_address" terraform_output.txt | cut -d '=' -f2 | tr -d ' "'
+      - grep "global_accelerator_address" terraform_output.txt | cut -d '=' -f2 | tr -d ' "' || echo "Global Accelerator address not found in output"
