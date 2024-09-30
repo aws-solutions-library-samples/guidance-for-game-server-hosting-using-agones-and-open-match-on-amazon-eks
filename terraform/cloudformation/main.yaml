@@ -100,6 +100,8 @@ Parameters:
     Type: String
     Description: The ARN of the admin role (optional)
     Default: ""
+    AllowedPattern: "^$|^arn:aws:iam::[0-9]{12}:role/.+$"
+    ConstraintDescription: "Must be a valid IAM role ARN or empty"
 
 Resources:
   CodeBuildProject:

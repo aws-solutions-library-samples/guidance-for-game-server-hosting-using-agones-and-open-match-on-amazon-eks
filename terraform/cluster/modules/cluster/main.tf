@@ -146,15 +146,19 @@ module "eks" {
     }
 
   }
+
   manage_aws_auth_configmap = true
   aws_auth_roles = flatten([
-    module.eks_blueprints_admin_team.aws_auth_configmap_role
+    module.eks_blueprints_admin_team.aws_auth_configmap_role,
+    var.admin_role_arn != "" ? [{
+      rolearn  = var.admin_role_arn
+      username = "admin"
+      groups   = ["system:masters"]
+    }] : []
   ])
 
   tags = local.tags
 }
-
-
 
 ################################################################################
 # Supporting Resources
@@ -169,12 +173,12 @@ module "vpc" {
   cidr = var.cluster_cidr
 
   azs                     = local.azs
-  private_subnets         = concat([for k, v in local.azs : cidrsubnet(var.cluster_cidr, 6, k)], 
-                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 8)],
-                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 16)],
-                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 24)],
-                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 32)]
-                            )
+  private_subnets         = concat([for k, v in local.azs : cidrsubnet(var.cluster_cidr, 6, k)],
+    [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 8)],
+    [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 16)],
+    [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 24)],
+    [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 32)]
+  )
   public_subnets          = [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 56)]
   map_public_ip_on_launch = true
 
@@ -206,8 +210,8 @@ module "eks_blueprints_admin_team" {
 
   enable_admin = true
   users = concat(
-    [data.aws_caller_identity.current.arn],  # Always included
-    var.additional_admin_arn != "" ? [var.additional_admin_arn] : []  # Conditionally included
+    [data.aws_caller_identity.current.arn], # Adds the current user running Terraform (e.g. Administrator, CodeBuild, etc. )
+    var.admin_role_arn != "" ? [var.admin_role_arn] : [] # Adds an optional Admin user ARN (Ideal for when Terraform is being run by CodeBuild as the current user)
   )
   cluster_arn  = module.eks.cluster_arn
 
@@ -233,10 +237,4 @@ resource "null_resource" "kubectl" {
   provisioner "local-exec" {
     command = "aws eks --region ${var.cluster_region}  update-kubeconfig --name ${var.cluster_name}"
   }
-}
-
-variable "additional_admin_arn" {
-  description = "ARN of an additional admin (optional)"
-  type        = string
-  default     = ""  # Set a default value if needed
 }
