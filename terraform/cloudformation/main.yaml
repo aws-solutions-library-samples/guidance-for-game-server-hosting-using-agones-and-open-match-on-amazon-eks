@@ -509,6 +509,7 @@ Resources:
                   - iam:GetOpenIDConnectProvider
                   - iam:DeleteOpenIDConnectProvider
                   - iam:UpdateAssumeRolePolicy
+                  - iam:CreatePolicyVersion
                 Resource: "*"
               - Effect: Allow
                 Action:
