@@ -1,25 +1,26 @@
 ## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 ## SPDX-License-Identifier: MIT-0
 
-FROM public.ecr.aws/docker/library/golang:1.21.4-alpine3.18 as go
-RUN apk add git
+FROM public.ecr.aws/docker/library/golang:1.21.4-alpine3.18 AS builder
+RUN apk add --no-cache git
 WORKDIR /app
-ENV GO111MODULE=on
-ENV GOPROXY=direct,https://proxy.golang.org
 
-COPY go.mod .
-COPY go.sum .
-RUN go mod download -x
-COPY *.go .
-RUN go build -o matchfunction .
+# Leverage caching by copying go.mod and go.sum first
+COPY go.mod go.sum ./
+RUN go mod download
 
+# Copy the remaining files and build
+COPY . .
+RUN go build -o matchfunction
 
+# Final minimal image
 FROM public.ecr.aws/docker/library/alpine:3.18
-
 WORKDIR /app
-COPY --from=go /app/matchfunction /app/matchfunction
-COPY *.cert .
-COPY *.key .
+
+# Copy only the binary and necessary files
+COPY --from=builder /app/matchfunction /app/matchfunction
+COPY *.cert *.key ./
+
 USER 999
 HEALTHCHECK CMD ["true"]
 
