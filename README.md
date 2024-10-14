@@ -33,7 +33,8 @@ This README aims to provide a succint installation guide for the integration. Fo
 │   ├── clients 
 │   │   ├── allocation-client
 │   │   ├── ncat
-│   │   └── stk
+│   │   ├── stk
+│   │   └── stk-server-build
 │   ├── director 
 │   ├── matchfunction
 │   └── ncat-server
@@ -191,7 +192,7 @@ Currently, the following list shows all available configurable variables for cre
 - `agones_metrics_arm_based_instances_cluster_1` (bool)
 - `agones_metrics_arm_based_instances_cluster_2` (bool)
 
-Unfortunately, open match does not have an arm-based container image. Hence why the managed node groups that help run openmatch are not available for configuration.
+Unfortunately, open match does not have an arm-based container image. Hence why the managed node groups that help run openmatch are not available for architecture configuration.
 
 ### terraform/intra-cluster
 The commands below will deploy our resources inside the clusters created in the last step. We use the output values from `terraform/cluster` as input to the `terraform/intra-cluster` module.
@@ -234,7 +235,7 @@ First, set an environment variable that matches the name of the loadbalancer ser
 ```
 OPEN_MATCH_SVC_NAME=$CLUSTER1-om-fe
 ```
-Note: If you want to rename the Open Match service then you can do so in the /scripts/configure-open-match-ingress.sh file. Also note that the dashes in the above environment variable setting command help the shell know the end of an environment variable ($CLUSTER1) and the start of a string (-om-fe). Running the command `OPEN_MATCH_SVC_NAME=$CLUSTER1omfe` will not work in setting a new environment variable that concatenates an existing environment variable with a other text.
+Note: If you want to rename the Open Match service then you can do so in the /scripts/configure-open-match-ingress.sh file. Also note that the dashes in the above environment variable setting command help the shell know the end of an environment variable ($CLUSTER1) and the start of a string (-om-fe). Running the command `OPEN_MATCH_SVC_NAME=$CLUSTER1omfe` will not work in setting a new environment variable that concatenates an existing environment variable with other text.
 
 #### Ensure that your kubectl context is set to the correct context for Cluster 1 before executing the next two commands.
 ```bash
@@ -421,7 +422,7 @@ again, before starting the clients with new values.
 We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in [integration/clients/stk/](integration/clients/stk/) to test the SuperTuxKart integration with Open Match and Agones, similarly to our ncat example above. Please, refer to the [README.md](integration/clients/stk/README.md) in the stk folder for more instructions.
 
 ## Clean Up Resources
-Note: If you run the below command in a new terminal that no longer retains the necessary environment variables then please reset the necessary environment variables by running 1) running the initial environment variable-setting command at the beginning of this walkthrough, and 2) run the environment variable-setting commands present in the terraform/extra-cluster create command.
+Note: If you run the below command in a new terminal that no longer retains the necessary environment variables from previous commands then please reset the necessary environment variables by running 1) the initial environment variable-setting command for cluster name, cluster version, etc. at the beginning of this walkthrough, and 2) run the environment variable-setting commands present in the terraform/extra-cluster create command.
 
 - Destroy the extra clusters components
     ```bash

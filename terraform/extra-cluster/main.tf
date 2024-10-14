@@ -37,6 +37,18 @@ resource "aws_ecr_repository" "agones-openmatch-director" {
     scan_on_push = true
   }
 }
+
+resource "aws_ecr_repository" "supertuxkart-server" {
+  #checkov:skip=CKV_AWS_136:Encryption disabled for tests
+  name                 = "supertuxkart-server"
+  image_tag_mutability = "IMMUTABLE" # Remove if you need to push the container with the same tag to the ECR (not recommended)
+  # image_tag_mutability = "MUTABLE"
+  force_delete         = true # Remove to avoid destroying when not empty
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
 resource "aws_ecr_repository" "agones-openmatch-mmf" {
   #checkov:skip=CKV_AWS_136:Encryption disabled for tests
   name                 = "agones-openmatch-mmf"

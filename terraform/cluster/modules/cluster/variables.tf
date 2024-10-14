@@ -107,19 +107,26 @@ variable "agones_system_arm_based_ami_type" {
   default = "AL2_ARM_64"
 }
 
+# Minimum must be at least 3 for multiple agones system pods unless you increase the ebs volume size per node
 variable "agones_system_min_size" {
-  type    = number
-  default = 1
-}
-
-variable "agones_system_max_size" {
   type    = number
   default = 3
 }
 
+variable "agones_system_max_size" {
+  type    = number
+  default = 6
+}
+
 variable "agones_system_desired_size" {
   type    = number
-  default = 1
+  default = 3
+}
+
+# This variable currently is not used during cluster creation
+variable "agones_system_ebs_size" {
+  type    = number
+  default = 50
 }
 
 # Variable for ensuring that nodes in the agones metrics Managed Node Group (MNG) use arm-based instances

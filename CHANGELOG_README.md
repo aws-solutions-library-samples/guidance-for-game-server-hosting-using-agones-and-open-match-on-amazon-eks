@@ -5,6 +5,18 @@
 Running log of recent changes, on a git commit level. The purpose of this document is to provide more details about changes to the project without having overly verbose commit messages.
 
 # Change Log
+## 10-11-2024
+**TLDR;** Wrapped up all SuperTuxKart changes so it now works with Arm-based instances. Running the game with AI racers has not been tested yet.
+
+- Updated the node affinity attributes of SuperTuxKart's manifest files to have the appropriate agones servers launched in the gameserver Managed Node Group.
+- Increased the minimum number of nodes for the Agones Managed Node Group to 3 for adequate storage (EBS volumes) for all required workloads.
+- Incorporated commands in `deploy-stk-fleets.sh` script to download the necessary files to build an arm-based version of SuperTuxKart for Agones.
+- Created an immutable ECR Repository for SuperTuxKart arm-based image to be stored and pulled when needed
+- Added pod anti-affinity for the agones controller to improve reliability
+- Configured helm values for agones helm chart to add node selector terms to appropriate pods launched by the helm chart
+- Updated README.md for SuperTuxKart example
+- Updated general README.md
+
 ## 9-2-2024
 **TLDR;** Modified ncat gameservers to have the ability to run with arm-based containers. Made ECR repos mutable. Added arm-arch node affinity to /integration/director/director.yaml and /integration/matchfunction/matchfunction.yaml.
 

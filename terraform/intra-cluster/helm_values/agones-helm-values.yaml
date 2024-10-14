@@ -47,12 +47,25 @@ agones:
         effect: "NoExecute"
     affinity:
       nodeAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 1
-            preference:
-              matchExpressions:
-                - key: "agones.dev/agones-system"
-                  operator: Exists
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: agones.dev/agones-system
+              operator: Exists
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: agones-controller
+              operator: In
+              values: ["true"]
+          topologyKey: topology.kubernetes.io/zone
+        # preferredDuringSchedulingIgnoredDuringExecution:
+        #   - weight: 1
+        #     preference:
+        #       matchExpressions:
+        #         - key: "agones.dev/agones-system"
+        #           operator: Exists
     generateTLS: true
     tlsCert: ""
     tlsKey: ""

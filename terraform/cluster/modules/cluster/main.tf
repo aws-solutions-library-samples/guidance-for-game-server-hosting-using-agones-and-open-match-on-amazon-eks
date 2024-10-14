@@ -79,6 +79,11 @@ module "eks" {
     agones_system = {
       instance_types = local.agones_system_instance_types
       ami_type       = local.agones_system_ami_type
+
+      # To use disk_size, you must use a standard launch template. Otherwise the value is ignored.
+      # Source: https://registry.terraform.io/modules/terraform-aws-modules/eks/aws/latest/submodules/eks-managed-node-group
+      # use_custom_launch_template = false
+      # disk_size      = var.agones_system_ebs_size
       labels = {
         "agones.dev/agones-system" = true
       }

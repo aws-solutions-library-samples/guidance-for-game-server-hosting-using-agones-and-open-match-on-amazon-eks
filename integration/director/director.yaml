@@ -121,6 +121,10 @@ spec:
                   operator: In
                   values:
                   - amd64
+                - key: openmatch
+                  operator: In
+                  values:
+                  - customization
       volumes:
       - configMap:
           defaultMode: 420
