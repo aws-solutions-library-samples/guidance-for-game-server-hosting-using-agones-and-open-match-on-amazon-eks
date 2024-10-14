@@ -29,7 +29,8 @@ spec:
         spec:
           containers:
           - name: supertuxkart
-            image: gcr.io/agones-images/supertuxkart-example:0.4
+            # image: gcr.io/agones-images/supertuxkart-example:0.4
+            image: ${REGISTRY}/supertuxkart-server:latest
             resources:
               requests:
                 memory: "64Mi"
@@ -40,3 +41,10 @@ spec:
             securityContext:                 
               allowPrivilegeEscalation: false
               runAsNonRoot: true
+                  affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: agones.dev/agones-gameserver
+                  operator: Exists

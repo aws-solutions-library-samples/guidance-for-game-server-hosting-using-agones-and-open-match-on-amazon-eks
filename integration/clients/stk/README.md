@@ -16,8 +16,14 @@ kubectl delete fleets -n gameservers --all
 ```
 
 2. Deploy STK servers
+For x86-based instances:
 ```bash
-sh scripts/deploy-stk-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2}
+sh scripts/deploy-stk-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2} amd64
+```
+
+For arm-based instances:
+```bash
+sh scripts/deploy-stk-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2} arm64
 ```
 
 ### Test the stk server

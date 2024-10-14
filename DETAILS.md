@@ -1,3 +1,6 @@
+## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
+
 # Technical Details
 This document provides deeper information about the project, to be used in conjunction with the [README](./README.md) file.
 
