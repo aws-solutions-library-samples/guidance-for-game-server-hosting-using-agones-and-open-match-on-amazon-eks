@@ -33,7 +33,8 @@ This README aims to provide a succint installation guide for the integration. Fo
 │   ├── clients 
 │   │   ├── allocation-client
 │   │   ├── ncat
-│   │   └── stk
+│   │   ├── stk
+│   │   └── stk-server-build
 │   ├── director 
 │   ├── matchfunction
 │   └── ncat-server
@@ -68,7 +69,9 @@ Dockerfile and Kubernetes manifests enable container building and deploying.
 
 
 ## Pre-requisites
-This guidance assumes the user already has access to an AWS account and has the [AWS command line interface](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed and configured to access the account using their credentials. 
+This guidance assumes that the user already has access to an AWS account and has the [AWS command line interface](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed and configured to access the account using their credentials. **Ensure that the output option for the AWS CLI is switched to `json`.** To do so, run the command `aws configure` and modify the output option when prompted. If the AWS CLI output option is set to its default `text` output then you may encounter an error while deploying the terraform templates.
+
+
 While the commands and scripts here were tested on `bash` and `zsh` shells, they can be run with some modifications in other shells, like `Windows PowerShell` or `fish`.
 
 To deploy the infrastructure and run the examples, we need:
@@ -79,7 +82,7 @@ To deploy the infrastructure and run the examples, we need:
 - [gettext](https://www.drupal.org/docs/8/modules/potion/how-to-install-setup-gettext)
 - [Go](https://go.dev/doc/install)
 - [Docker](https://docs.docker.com/get-docker/)
-- [OpenSSL](https://www.openssl.org/source/)
+- [OpenSSL](https://www.openssl.org/source/) (Some operating systems, such as MacOS, may already have this built into them.)
 
 ## Create the clusters and deploy the required components
 
@@ -107,7 +110,11 @@ For simplicity, we will be using local Terraform state files. In production work
 
 ### terraform/cluster
 
-Run the following commands to create EKS clusters, with the names and regions configured in the previous steps.
+**Select one of the options below to deploy the compute components of the EKS Clusters** By default, any Managed Node Group not specified to use arm-based instances will use x86-based instances.
+
+#### Option 1
+
+Run the following commands to create EKS clusters with **all x86-based instance types,** with the names and regions configured in the previous steps.
 ```bash
 # Initialize Terraform
 terraform -chdir=terraform/cluster init &&
@@ -121,6 +128,71 @@ terraform -chdir=terraform/cluster apply -auto-approve \
  -var="cluster_2_cidr=${CIDR2}" \
  -var="cluster_version=${VERSION}"
 ```
+
+
+#### Option 2
+
+Run the following commands to create EKS clusters with **all arm-based instance types.**
+```
+# Initialize Terraform
+terraform -chdir=terraform/cluster init &&
+# Create both clusters
+terraform -chdir=terraform/cluster apply -auto-approve \
+ -var="cluster_1_name=${CLUSTER1}" \
+ -var="cluster_1_region=${REGION1}" \
+ -var="cluster_1_cidr=${CIDR1}" \
+ -var="cluster_2_name=${CLUSTER2}" \
+ -var="cluster_2_region=${REGION2}" \
+ -var="cluster_2_cidr=${CIDR2}" \
+ -var="cluster_version=${VERSION}" \
+ -var="all_arm_based_instances_cluster_1"=true \
+ -var="all_arm_based_instances_cluster_2"=true
+```
+
+
+#### Option 3
+
+Run the following commands to create EKS clusters with **a variety of x86 and arm-based instance types for each Managed Node Group.**
+```
+# Initialize Terraform
+terraform -chdir=terraform/cluster init &&
+# Create both clusters
+terraform -chdir=terraform/cluster apply -auto-approve \
+ -var="cluster_1_name=${CLUSTER1}" \
+ -var="cluster_1_region=${REGION1}" \
+ -var="cluster_1_cidr=${CIDR1}" \
+ -var="cluster_2_name=${CLUSTER2}" \
+ -var="cluster_2_region=${REGION2}" \
+ -var="cluster_2_cidr=${CIDR2}" \
+ -var="cluster_version=${VERSION}" \
+ -var="gameservers_arm_based_instances_cluster_1"=true \
+ -var="gameservers_arm_based_instances_cluster_2"=true \
+ -var="agones_system_arm_based_instances_cluster_1"=true \
+ -var="agones_system_arm_based_instances_cluster_2"=true \
+ -var="agones_metrics_arm_based_instances_cluster_1"=false \
+ -var="agones_metrics_arm_based_instances_cluster_2"=false
+```
+
+
+#### Configurable Variables in terraform/cluster creation
+Currently, the following list shows all available configurable variables for creating the compute components of the EKS clusters through the `terraform -chdir=terraform/cluster apply` command:
+- `cluster_1_name` (string)
+- `cluster_1_region` (string)
+- `cluster_1_cidr` (string)
+- `cluster_2_name` (string)
+- `cluster_2_region` (string)
+- `cluster_2_cidr` (string)
+- `cluster_version` (string)
+- `all_arm_based_instances_cluster_1` (bool)
+- `all_arm_based_instances_cluster_2` (bool)
+- `gameservers_arm_based_instances_cluster_1` (bool)
+- `gameservers_arm_based_instances_cluster_2` (bool)
+- `agones_system_arm_based_instances_cluster_1` (bool)
+- `agones_system_arm_based_instances_cluster_2` (bool)
+- `agones_metrics_arm_based_instances_cluster_1` (bool)
+- `agones_metrics_arm_based_instances_cluster_2` (bool)
+
+Unfortunately, open match does not have an arm-based container image. Hence why the managed node groups that help run openmatch are not available for architecture configuration.
 
 ### terraform/intra-cluster
 The commands below will deploy our resources inside the clusters created in the last step. We use the output values from `terraform/cluster` as input to the `terraform/intra-cluster` module.
@@ -158,9 +230,21 @@ terraform -chdir=terraform/intra-cluster apply -auto-approve \
 
 ### fetch the load balancer ARN
 Run the commands below to get the ARN of the load balancer deployed in the previous step. The value will be passed as a variable to the next step.
-Set the name of the Load balancer first:
+
+First, set an environment variable that matches the name of the loadbalancer service. The name can be found by running the `kubectl get services -n open-match` command and looking for the only service of type LoadBalancer.
+```
+OPEN_MATCH_SVC_NAME=$CLUSTER1-om-fe
+```
+Note: If you want to rename the Open Match service then you can do so in the /scripts/configure-open-match-ingress.sh file. Also note that the dashes in the above environment variable setting command help the shell know the end of an environment variable ($CLUSTER1) and the start of a string (-om-fe). Running the command `OPEN_MATCH_SVC_NAME=$CLUSTER1omfe` will not work in setting a new environment variable that concatenates an existing environment variable with other text.
+
+#### Ensure that your kubectl context is set to the correct context for Cluster 1 before executing the next two commands.
 ```bash
-FLB_NAME=$(kubectl get services -n open-match -o json | jq -r '.items[] | select(.metadata.name=="open-match-frontend-loadbalancer") | .status.loadBalancer.ingress[0].hostname')
+kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
+```
+
+Next, set the name of the Load balancer:
+```bash
+FLB_NAME=$(kubectl get services -n open-match -o json | jq -r --arg OPEN_MATCH_SVC_NAME "$OPEN_MATCH_SVC_NAME" '.items[] | select(.metadata.name==$OPEN_MATCH_SVC_NAME) | .status.loadBalancer.ingress[0].hostname')
 ```
 Then retrieve the ARN of the load balancer:
 ```bash
@@ -205,7 +289,7 @@ terraform -chdir=terraform/extra-cluster apply -auto-approve \
  -var="cluster_2_token=${TOKEN2}" \
  -var="cluster_1_region=${REGION1}" \
  -var="ecr_region=${REGION1}" \
- -var="cluster_2_region=${REGION2}"
+ -var="cluster_2_region=${REGION2}" \
  -var="aws_lb_arn=${FLB_ARN}"
 
 ```
@@ -230,10 +314,16 @@ We will use the ncat-server deployment to test the Open Match matchmaking.
 
 **Note: Verify that Docker is running before the next steps.**
 
-Use the command below to build the image, push it to the ECR repository, and deploy 4 fleets of ncat game servers on each cluster. 
+Use one of the below commands to build the image, push it to the ECR repository, and deploy 4 fleets of ncat game servers on each cluster. 
 
+#### X86-based nodes in the gameservers managed node group
 ```bash
-sh scripts/deploy-ncat-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2}
+sh scripts/deploy-ncat-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2} amd64
+```
+
+#### arm-based nodes in the gameservers managed node group
+```bash
+sh scripts/deploy-ncat-fleets.sh ${CLUSTER1} ${REGION1} ${CLUSTER2} ${REGION2} arm64
 ```
 
 ## Integrate Open Match with Agones
@@ -332,7 +422,7 @@ again, before starting the clients with new values.
 We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in [integration/clients/stk/](integration/clients/stk/) to test the SuperTuxKart integration with Open Match and Agones, similarly to our ncat example above. Please, refer to the [README.md](integration/clients/stk/README.md) in the stk folder for more instructions.
 
 ## Clean Up Resources
-
+Note: If you run the below command in a new terminal that no longer retains the necessary environment variables from previous commands then please reset the necessary environment variables by running 1) the initial environment variable-setting command for cluster name, cluster version, etc. at the beginning of this walkthrough, and 2) run the environment variable-setting commands present in the terraform/extra-cluster create command.
 
 - Destroy the extra clusters components
     ```bash
@@ -355,7 +445,8 @@ We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in
      -var="cluster_2_token=${TOKEN2}" \
      -var="cluster_1_region=${REGION1}" \
      -var="ecr_region=${REGION1}" \
-     -var="cluster_2_region=${REGION2}"
+     -var="cluster_2_region=${REGION2}" \
+     -var="aws_lb_arn=${FLB_ARN}"
     ``` 
 
 - Delete the Load Balancers and Security Groups
