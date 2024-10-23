@@ -455,6 +455,7 @@ Resources:
                   - globalaccelerator:ListCustomRoutingTraffic
                   - globalaccelerator:DescribeCustomRoutingTraffic
                   - globalaccelerator:UpdateCustomRoutingTraffic
+                  - globalaccelerator:ListCrossAccountResources
                 Resource: "*"
               - Effect: Allow
                 Action:
