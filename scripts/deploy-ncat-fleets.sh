@@ -8,10 +8,22 @@ export CLUSTER_NAME2=$3
 export REGION2=$4
 export ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 export REGISTRY=${ACCOUNT_ID}.dkr.ecr.${REGION1}.amazonaws.com
+export ARCHITECTURE=$5
 
 
 aws ecr get-login-password --region ${REGION1} | docker login --username AWS --password-stdin $REGISTRY
-docker buildx build --platform=linux/amd64  -t $REGISTRY/agones-openmatch-ncat-server integration/ncat-server
+#docker buildx build --platform=linux/amd64  -t $REGISTRY/agones-openmatch-ncat-server integration/ncat-server
+#docker buildx build --platform=linux/arm64  -t $REGISTRY/agones-openmatch-ncat-server integration/ncat-server
+echo "Architecture is" $ARCHITECTURE
+if [[ $ARCHITECTURE == "arm64" ]];
+then 
+  docker buildx build --platform=linux/arm64  -t $REGISTRY/agones-openmatch-ncat-server integration/ncat-server
+  echo "building arm64 version";
+else 
+  docker buildx build --platform=linux/amd64  -t $REGISTRY/agones-openmatch-ncat-server integration/ncat-server
+  echo "building amd64 version";
+fi
+
 docker push $REGISTRY/agones-openmatch-ncat-server
 
 kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME1})

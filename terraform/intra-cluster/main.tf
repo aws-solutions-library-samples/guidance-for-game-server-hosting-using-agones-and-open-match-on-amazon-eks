@@ -92,6 +92,12 @@ module "eks_blueprints_addons" {
 
 
   # Opinions for our game servers cluster
+  aws_for_fluentbit                   = { 
+    set = [{
+      name = "cloudWatchLogs.autoCreateGroup"
+      value = true
+    }]
+  }
   enable_metrics_server               = true
   enable_aws_cloudwatch_metrics       = true
   enable_aws_for_fluentbit            = true
@@ -148,6 +154,30 @@ resource "helm_release" "agones" {
     type  = "string"
   }
 
+#  set {
+#    name = "agones.controller.labels.agones-controller"
+#    value = "true"
+#    type  = "string"
+#  }
+
+  set {
+    name = "agones.extensions.nodeSelector.agones\\.dev/agones-system"
+    value = "true"
+    type  = "string"
+  }
+
+  set {
+    name = "agones.ping.nodeSelector.agones\\.dev/agones-system"
+    value = "true"
+    type  = "string"
+  }
+
+  set {
+    name = "agones.allocator.nodeSelector.agones\\.dev/agones-system"
+    value = "true"
+    type  = "string"
+  }
+
   depends_on = [
     module.eks_blueprints_addons,
     kubernetes_namespace.this
@@ -200,6 +230,11 @@ resource "helm_release" "open-match" {
   set {
     name  = "global.kubernetes.nodeSelector.openmatch"
     value = "system"
+  }
+
+  set {
+    name = "redis.master.nodeSelector"
+    value = "\\{\"openmatch\": \"system\"\\}"
   }
 
   depends_on = [
