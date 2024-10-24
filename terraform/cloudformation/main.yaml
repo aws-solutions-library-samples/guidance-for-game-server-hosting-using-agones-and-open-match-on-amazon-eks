@@ -179,6 +179,7 @@ Resources:
   CodeBuildArtifactsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub agoe-artifacts-${AWS::AccountId}-${AWS::Region}
       VersioningConfiguration:
@@ -204,6 +205,23 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: "false"
+          - Sid: AllowListBucketVersions
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EmptyS3BucketsRole.Arn
+            Action:
+              - s3:ListBucket
+              - s3:ListBucketVersions
+              - s3:GetBucketLocation
+            Resource: !GetAtt CodeBuildArtifactsBucket.Arn
+          - Sid: AllowObjectOperations
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EmptyS3BucketsRole.Arn
+            Action:
+              - s3:DeleteObject
+              - s3:DeleteObjectVersion
+            Resource: !Sub ${CodeBuildArtifactsBucket.Arn}/*
 
   CodePipelineProject:
     Type: AWS::CodePipeline::Pipeline
@@ -583,12 +601,129 @@ Resources:
   TerraformStateBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub agoe-state-bucket-${AWS::AccountId}-${AWS::Region}
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+
+  EmptyS3BucketsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: EmptyS3BucketsRole
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt EmptyS3BucketsRole.Arn
+      FunctionName: !Sub EmptyS3BucketsFunction-${AWS::Region}
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def delete_bucket_contents(bucket_name):
+              s3 = boto3.resource('s3')
+              bucket = s3.Bucket(bucket_name)
+              try:
+                  bucket.objects.all().delete()
+                  bucket.object_versions.all().delete()
+                  logger.info(f'Successfully emptied bucket: {bucket_name}')
+              except Exception as e:
+                  logger.error(f'Error emptying bucket {bucket_name}: {str(e)}')
+                  raise
+
+          def delete_log_group(function_name):
+              logs_client = boto3.client('logs')
+              log_group_name = f'/aws/lambda/{function_name}'
+              try:
+                  logs_client.delete_log_group(logGroupName=log_group_name)
+                  logger.info(f'Successfully deleted log group: {log_group_name}')
+              except logs_client.exceptions.ResourceNotFoundException:
+                  logger.info(f'Log group {log_group_name} does not exist.')
+              except Exception as e:
+                  logger.error(f'Error deleting log group {log_group_name}: {str(e)}')
+
+          def handler(event, context):
+              logger.info('Received event: %s', event)
+              status = cfnresponse.SUCCESS
+              try:
+                  if event['RequestType'] == 'Delete':
+                      buckets = event['ResourceProperties']['BucketsToEmpty']
+                      for bucket in buckets:
+                          delete_bucket_contents(bucket)
+                      logger.info('Successfully emptied all buckets')
+                      delete_log_group(context.function_name)
+                      logger.info('Successfully deleted log group')
+              except Exception as e:
+                  logger.error('Error: %s', str(e))
+                  status = cfnresponse.FAILED
+              finally:
+                  cfnresponse.send(event, context, status, {})
+
+      Runtime: python3.12
+      Timeout: 300
+
+  EmptyS3BucketsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub EmptyS3BucketsRole-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EmptyS3BucketsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:ListBucketVersions'
+                  - 's3:DeleteObject'
+                  - 's3:DeleteObjectVersion'
+                  - 's3:GetBucketLocation'
+                Resource:
+                  - !GetAtt CodeBuildArtifactsBucket.Arn
+                  - !Sub '${CodeBuildArtifactsBucket.Arn}/*'
+                  - !GetAtt TerraformStateBucket.Arn
+                  - !Sub '${TerraformStateBucket.Arn}/*'
+                  - 'arn:aws:s3:::agoe-artifacts-*'
+                  - 'arn:aws:s3:::agoe-artifacts-*/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucketVersions'
+                Resource: 'arn:aws:s3:::agoe-artifacts-*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DeleteLogGroup'
+                Resource: 'arn:aws:logs:*:*:*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  EmptyS3BucketsCustomResource:
+    Type: Custom::EmptyS3Buckets
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketsFunction.Arn
+      RoleName: !Ref EmptyS3BucketsRole
+      BucketsToEmpty: 
+        - !Ref CodeBuildArtifactsBucket
+        - !Ref TerraformStateBucket
+    DependsOn:
+      - CodeBuildArtifactsBucket
+      - TerraformStateBucket
+      - EmptyS3BucketsRole
+      - EmptyS3BucketsFunction
 
   TerraformStateBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -614,6 +749,23 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: "false"
+          - Sid: AllowListBucketVersions
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EmptyS3BucketsRole.Arn
+            Action:
+              - s3:ListBucket
+              - s3:ListBucketVersions
+              - s3:GetBucketLocation
+            Resource: !GetAtt TerraformStateBucket.Arn
+          - Sid: AllowObjectOperations
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EmptyS3BucketsRole.Arn
+            Action:
+              - s3:DeleteObject
+              - s3:DeleteObjectVersion
+            Resource: !Sub ${TerraformStateBucket.Arn}/*
 
   TerraformDynamoDBLockTable:
     Type: AWS::DynamoDB::Table
