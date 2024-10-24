@@ -99,6 +99,22 @@ module "eks" {
       desired_size = var.agones_system_desired_size
 
       subnet_ids = slice(module.vpc.private_subnets, 0, 3)
+
+      # Adds the current running users, and the admin_role_arn ARN to the KSM key administrators
+      kms_key_adminstrators = [data.aws_caller_identity.current.arn, var.admin_role_arn != "" ? [var.admin_role_arn] : []]
+
+      # Adds the admin_role_arn ARN to the Cluster administrators
+      manage_aws_auth_configmap = true
+      aws_auth_roles = [
+        {
+          rolearn  = var.admin_role_arn
+          username = "admin"
+          groups = [
+            "system:masters"
+          ]
+        }
+      ]
+
     }
     agones_metrics = {
       instance_types = local.agones_metrics_instance_types
