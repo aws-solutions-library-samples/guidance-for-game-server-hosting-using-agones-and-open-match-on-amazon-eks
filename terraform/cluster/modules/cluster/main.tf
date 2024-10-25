@@ -100,21 +100,6 @@ module "eks" {
 
       subnet_ids = slice(module.vpc.private_subnets, 0, 3)
 
-      # Adds the current running users, and the admin_role_arn ARN to the KSM key administrators
-      kms_key_adminstrators = [data.aws_caller_identity.current.arn, var.admin_role_arn != "" ? [var.admin_role_arn] : []]
-
-      # Adds the admin_role_arn ARN to the Cluster administrators
-      manage_aws_auth_configmap = true
-      aws_auth_roles = [
-        {
-          rolearn  = var.admin_role_arn
-          username = "admin"
-          groups = [
-            "system:masters"
-          ]
-        }
-      ]
-
     }
     agones_metrics = {
       instance_types = local.agones_metrics_instance_types
@@ -162,6 +147,16 @@ module "eks" {
     }
   }
 
+  # Keep create_kms_key as true (or omit it, as it's true by default)
+  create_kms_key = true
+
+  # Customize the implicitly created KMS key that is created by Terraform
+  kms_key_administrators          = concat([data.aws_caller_identity.current.arn], var.admin_role_arn != "" ? [var.admin_role_arn] : [])
+  kms_key_users                   = [data.aws_caller_identity.current.arn]
+  kms_key_description             = "KMS Encryption Key for EKS Cluster"
+  kms_key_deletion_window_in_days = 30
+  enable_kms_key_rotation         = true
+
   eks_managed_node_group_defaults = {
     iam_role_additional_policies = {
       AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
@@ -199,12 +194,7 @@ module "eks" {
 
   manage_aws_auth_configmap = true
   aws_auth_roles = flatten([
-    module.eks_blueprints_admin_team.aws_auth_configmap_role,
-    var.admin_role_arn != "" ? [{
-      rolearn  = var.admin_role_arn
-      username = "admin"
-      groups   = ["system:masters"]
-    }] : []
+    module.eks_blueprints_admin_team.aws_auth_configmap_role
   ])
 
   tags = local.tags
