@@ -148,7 +148,7 @@ module "eks" {
   }
 
   # Keep create_kms_key as true (or omit it, as it's true by default)
-  create_kms_key = true
+  create_kms_key = true  
 
   # Customize the implicitly created KMS key that is created by Terraform
   kms_key_administrators          = concat([data.aws_caller_identity.current.arn], var.admin_role_arn != "" ? [var.admin_role_arn] : [])
@@ -277,4 +277,14 @@ resource "null_resource" "kubectl" {
   provisioner "local-exec" {
     command = "aws eks --region ${var.cluster_region}  update-kubeconfig --name ${var.cluster_name}"
   }
+}
+
+output "admin_role_arn" {
+  value       = var.admin_role_arn
+  description = "The ARN of the admin role passed to the module"
+}
+
+output "kms_key_administrators" {
+  value       = concat([data.aws_caller_identity.current.arn], var.admin_role_arn != "" ? [var.admin_role_arn] : [])
+  description = "The list of KMS key administrators"
 }
