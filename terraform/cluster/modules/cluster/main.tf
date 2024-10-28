@@ -56,8 +56,10 @@ module "eks" {
   source                         = "terraform-aws-modules/eks/aws"
   version                        = "~> 19.20"
   cluster_name                   = var.cluster_name
-  cluster_version                = var.cluster_version
-  cluster_endpoint_public_access = true
+  cluster_version                = var.cluster_version  
+  cluster_endpoint_public_access = true  
+
+  
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
@@ -151,7 +153,7 @@ module "eks" {
   create_kms_key = true  
 
   # Customize the implicitly created KMS key that is created by Terraform
-  kms_key_administrators          = concat([data.aws_caller_identity.current.arn], var.admin_role_arn != "" ? [var.admin_role_arn] : [])
+  kms_key_administrators          = concat([data.aws_caller_identity.current.arn], var.admin_role_arn != "" ? [var.admin_role_arn] : [])    
   kms_key_users                   = [data.aws_caller_identity.current.arn]
   kms_key_description             = "KMS Encryption Key for EKS Cluster"
   kms_key_deletion_window_in_days = 30
@@ -277,14 +279,4 @@ resource "null_resource" "kubectl" {
   provisioner "local-exec" {
     command = "aws eks --region ${var.cluster_region}  update-kubeconfig --name ${var.cluster_name}"
   }
-}
-
-output "admin_role_arn" {
-  value       = var.admin_role_arn
-  description = "The ARN of the admin role passed to the module"
-}
-
-output "kms_key_administrators" {
-  value       = concat([data.aws_caller_identity.current.arn], var.admin_role_arn != "" ? [var.admin_role_arn] : [])
-  description = "The list of KMS key administrators"
 }

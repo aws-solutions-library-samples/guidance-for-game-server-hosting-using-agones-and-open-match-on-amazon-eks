@@ -98,8 +98,7 @@ Parameters:
     Description: The name of the Git repository
   AdminRoleArn:
     Type: String
-    Description: The ARN of the admin role (optional)
-    Default: ""
+    Description: The ARN of the admin role (required)
 
 Resources:
   CodeBuildProject:
@@ -541,7 +540,8 @@ Resources:
                   - kms:Get*
                   - kms:Delete*
                   - kms:ScheduleKeyDeletion
-                  - kms:CancelKeyDeletion
+                  - kms:CancelKeyDeletion                  
+                  - kms:DescribeKey
                 Resource: "*"
               - Effect: Allow
                 Action:

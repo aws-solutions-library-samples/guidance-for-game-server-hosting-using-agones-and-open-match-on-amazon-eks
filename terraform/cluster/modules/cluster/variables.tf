@@ -288,7 +288,7 @@ variable "open_match" {
 }
 
 variable "admin_role_arn" {
-  description = "ARN of the admin role"
   type        = string
   default     = ""
+  description = "ARN of the admin role passed into the module"
 }

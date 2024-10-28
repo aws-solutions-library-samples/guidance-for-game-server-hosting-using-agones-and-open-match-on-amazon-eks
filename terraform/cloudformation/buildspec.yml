@@ -58,7 +58,7 @@ phases:
           -backend-config="region=${AWS_REGION}" \
           -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}" \
           -backend-config="encrypt=true"
-
+      
       - echo "Creating both clusters..."
       - |
         terraform -chdir=terraform/cluster apply -auto-approve \
@@ -69,7 +69,7 @@ phases:
           -var="cluster_2_region=${REGION2}" \
           -var="cluster_2_cidr=${CIDR2}" \
           -var="cluster_version=${VERSION}" \
-          -var="admin_role_arn=${ADMIN_ROLE_ARN}"
+          -var="admin_role_arn_from_cloudformation=${ADMIN_ROLE_ARN}"
 
       - echo "Step 2 - Terraform Intra-Cluster"
       - echo "Initializing Terraform for intra-cluster configuration..."

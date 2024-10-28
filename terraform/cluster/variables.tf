@@ -123,8 +123,9 @@ variable "agones_metrics_arm_based_instances_cluster_2" {
 #   default = false
 # }
 
-variable "admin_role_arn" {
-  description = "ARN of the admin role"
+variable "admin_role_arn_from_cloudformation" {
   type        = string
   default     = ""
+  description = "ARN of the admin role"
+
 }
