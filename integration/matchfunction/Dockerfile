@@ -6,6 +6,8 @@ FROM public.ecr.aws/docker/library/golang:1.21.4-alpine3.18 AS builder
 RUN apk add --no-cache git
 WORKDIR /app
 
+# Set Go Proxy env variables
+ENV GOPROXY=https://goproxy.io,direct
 # Leverage caching by copying go.mod and go.sum first
 COPY go.mod go.sum ./
 RUN go mod download
