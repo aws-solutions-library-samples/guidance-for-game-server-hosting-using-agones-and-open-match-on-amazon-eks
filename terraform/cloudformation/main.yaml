@@ -57,48 +57,56 @@ Parameters:
     Default: 10.192.10.0/24
   CodeStarConnectionArn:
     Type: String
-    Description: CodeStar connection ARN for GitHub.
+    Description: "CodeStar connection ARN for GitHub (required)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "CodeStar Connection ARN cannot be empty"
   RepositoryLocation:
     Type: String
-    Description: The location of the GitHub repository
+    Description: "The location of the GitHub repository (required)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "Repository Location cannot be empty"
   Cluster1Name:
     Type: String
     Default: agones-gameservers-1
-    Description: Name of the first EKS cluster
+    Description: "Name of the first EKS cluster"
   Cluster1Region:
     Type: String
     Default: us-east-1
-    Description: Region for the first EKS cluster
+    Description: "Region for the first EKS cluster"
   Cluster1CIDR:
     Type: String
     Default: "10.1.0.0/16"
-    Description: CIDR block for the first EKS cluster VPC
+    Description: "CIDR block for the first EKS cluster VPC"
   Cluster2Name:
     Type: String
     Default: agones-gameservers-2
-    Description: Name of the second EKS cluster
+    Description: "Name of the second EKS cluster"
   Cluster2Region:
     Type: String
     Default: us-east-2
-    Description: Region for the second EKS cluster
+    Description: "Region for the second EKS cluster"
   Cluster2CIDR:
     Type: String
     Default: "10.2.0.0/16"
-    Description: CIDR block for the second EKS cluster VPC
+    Description: "CIDR block for the second EKS cluster VPC"
   KubernetesVersion:
     Type: String
     Default: "1.28"
-    Description: Kubernetes version for the EKS clusters
+    Description: "Kubernetes version for the EKS clusters"
   RepositoryOwner:
     Type: String
-    Description: The owner of the Git repository
+    Description: "The owner of the Git repository (required)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "Repository Owner cannot be empty"  
   RepositoryName:
     Type: String
     Default: guidance-for-game-server-hosting-using-agones-and-open-match-on-amazon-eks
-    Description: The name of the Git repository
+    Description: "The name of the Git repository"
   AdminRoleArn:
     Type: String
-    Description: The ARN of the admin role (required)
+    Description: "The ARN of the admin role (required)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "Admin Role ARN cannot be empty"
 
 Resources:
   CodeBuildProject:
