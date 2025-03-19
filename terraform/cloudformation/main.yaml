@@ -151,38 +151,6 @@ Resources:
         Location: !Ref RepositoryLocation        
         BuildSpec: terraform/cloudformation/buildspec.yml
 
-
-  CleanupCodeBuildProject:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: !Sub AGOE-Cleanup-${AWS::AccountId}-${AWS::Region}
-      Artifacts:
-        Type: NO_ARTIFACTS
-      Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_LARGE
-        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
-        PrivilegedMode: true
-        EnvironmentVariables:
-          - Name: TERRAFORM_STATE_BUCKET
-            Type: PLAINTEXT
-            Value: !Ref TerraformStateBucket
-          - Name: TERRAFORM_DYNAMO_TABLE
-            Value: !Ref TerraformDynamoDBLockTable
-          - Name: CLUSTER1
-            Value: !Ref Cluster1Name
-          - Name: REGION1
-            Value: !Ref Cluster1Region
-          - Name: CLUSTER2
-            Value: !Ref Cluster2Name
-          - Name: REGION2
-            Value: !Ref Cluster2Region
-      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
-      Source:        
-        Type: GITHUB
-        Location: !Ref RepositoryLocation                        
-        BuildSpec: terraform/cloudformation/cleanup-buildspec.yml
-
   CodeBuildArtifactsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
@@ -271,28 +239,6 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildProject
                 PrimarySource: AdminSourceArtifact
-        - Name: Approval
-          Actions:
-            - Name: ManualApproval
-              ActionTypeId:
-                Category: Approval
-                Owner: AWS
-                Provider: Manual
-                Version: "1"
-              RunOrder: 1
-        - Name: Cleanup
-          Actions:
-            - Name: CleanupAction
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Provider: CodeBuild
-                Version: "1"
-              Configuration:
-                ProjectName: !Ref CleanupCodeBuildProject
-              RunOrder: 1
-              InputArtifacts:
-                - Name: AdminSourceArtifact
 
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
@@ -781,7 +727,3 @@ Outputs:
   TerraformDynamoDBLockTableName:
     Description: Name of the DynamoDB Table
     Value: !Ref TerraformDynamoDBLockTable
-
-  CleanupBuildProject:
-    Description: CodeBuild project for cleaning up resources
-    Value: !Ref CleanupCodeBuildProject
