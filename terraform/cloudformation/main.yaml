@@ -537,27 +537,8 @@ Resources:
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - kms:Create*
-                  - kms:Describe*
-                  - kms:Enable*
-                  - kms:List*
-                  - kms:Put*
-                  - kms:Update*
-                  - kms:Revoke*
-                  - kms:Disable*
-                  - kms:Get*
-                  - kms:Delete*
-                  - kms:ScheduleKeyDeletion
-                  - kms:CancelKeyDeletion                  
-                  - kms:DescribeKey
-                Resource: "*"
-              - Effect: Allow
-                Action:
                   - kms:*
                 Resource: "*"
-                Condition:
-                  StringEquals:
-                    kms:CallerAccount: !Ref AWS::AccountId
               - Effect: Allow
                 Action:
                   - cloudformation:CreateStack
