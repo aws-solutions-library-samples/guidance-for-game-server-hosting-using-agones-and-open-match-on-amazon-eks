@@ -421,6 +421,78 @@ again, before starting the clients with new values.
 ### Test with SuperTuxKart
 We can use the fleets in the [fleets/stk/](fleets/stk/) folder and the client in [integration/clients/stk/](integration/clients/stk/) to test the SuperTuxKart integration with Open Match and Agones, similarly to our ncat example above. Please, refer to the [README.md](integration/clients/stk/README.md) in the stk folder for more instructions.
 
+## Automated Deployment with CloudFormation
+
+In addition to the manual deployment steps outlined above, this solution includes a CloudFormation template that automates the entire deployment process through AWS CodePipeline and CodeBuild. This approach eliminates the need to manually run Terraform commands and simplifies the deployment of the multi-cluster game server hosting environment.
+
+### CloudFormation Deployment Architecture
+
+The CloudFormation template creates a complete CI/CD pipeline that handles the deployment of all components:
+
+The automated deployment includes:
+- **AWS CodePipeline**: Orchestrates the deployment workflow
+- **AWS CodeBuild**: Executes the Terraform scripts in the correct sequence
+- **S3 Buckets**: Store Terraform state and deployment artifacts
+- **DynamoDB Table**: Manages Terraform state locking
+- **IAM Roles**: Provides necessary permissions for the deployment process
+
+The pipeline follows the same deployment steps as the manual process:
+1. Creates EKS clusters in both regions
+2. Deploys Agones and Open Match components within the clusters
+3. Sets up cross-region networking and Global Accelerator
+4. Deploys game server fleets and integration components
+
+### Deploying with CloudFormation
+
+To deploy using the CloudFormation template:
+
+1. Sign in to the AWS Management Console and navigate to the CloudFormation service
+2. Choose "Create stack" > "With new resources (standard)"
+3. Select "Upload a template file" and upload the `terraform/cloudformation/main.yaml` file
+4. Enter a stack name (e.g., "agones-openmatch-deployment")
+5. Configure the required parameters:
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| CodeStarConnectionArn | ARN of the CodeStar connection to GitHub (required) | - |
+| RepositoryOwner | Owner of the GitHub repository (required) | - |
+| RepositoryLocation | URL of the GitHub repository (required) | - |
+| AdminRoleArn | ARN of the admin role (required) | - |
+| Cluster1Name | Name for the first EKS cluster | agones-gameservers-1 |
+| Cluster1Region | AWS region for the first cluster | us-east-1 |
+| Cluster1CIDR | CIDR block for the first cluster's VPC | 10.1.0.0/16 |
+| Cluster2Name | Name for the second EKS cluster | agones-gameservers-2 |
+| Cluster2Region | AWS region for the second cluster | us-east-2 |
+| Cluster2CIDR | CIDR block for the second cluster's VPC | 10.2.0.0/16 |
+| KubernetesVersion | Kubernetes version for the EKS clusters | 1.28 |
+
+6. Review the configuration and acknowledge that CloudFormation might create IAM resources
+7. Choose "Create stack"
+
+> **Note:** Before deploying, you must create a CodeStar connection to GitHub. To do this:
+> 1. Navigate to the AWS Developer Tools console
+> 2. Select "Settings" > "Connections" > "Create connection"
+> 3. Choose GitHub as the provider and follow the prompts to authorize AWS to access your GitHub account
+> 4. Once the connection is created, use its ARN for the `CodeStarConnectionArn` parameter
+
+### Monitoring the Deployment
+
+The deployment process takes approximately 30-45 minutes to complete. You can monitor the progress:
+
+1. In the CloudFormation console, select your stack and view the "Events" tab
+2. In the CodePipeline console, select the pipeline created by CloudFormation to see detailed progress
+3. In the CodeBuild console, you can view the build logs for detailed information about each step
+
+### Accessing Deployment Outputs
+
+Once the deployment is complete:
+
+1. Navigate to the AWS CloudFormation console
+2. Select your stack and go to the "Outputs" tab
+3. Look for the Global Accelerator address that will be used to connect to your game servers
+
+You can also find this information in the CodeBuild logs, which will display the Terraform outputs at the end of the build process.
+
 ## Clean Up Resources
 Note: If you run the below command in a new terminal that no longer retains the necessary environment variables from previous commands then please reset the necessary environment variables by running 1) the initial environment variable-setting command for cluster name, cluster version, etc. at the beginning of this walkthrough, and 2) run the environment variable-setting commands present in the terraform/extra-cluster create command.
 
