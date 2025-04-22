@@ -532,6 +532,11 @@ Resources:
                   - dynamodb:DeleteItem
                   - dynamodb:DescribeTable
                 Resource: !GetAtt TerraformDynamoDBLockTable.Arn
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                  - codestar-connections:*
+                Resource: "*"
 
   TerraformStateBucket:
     Type: AWS::S3::Bucket
