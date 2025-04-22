@@ -7,8 +7,6 @@ locals {
   open_match_subnet_ids       = slice(module.vpc.private_subnets, 6, 8)
   agones_openmatch_subnet_ids = slice(module.vpc.private_subnets, 8, 10)
   azs                         = slice(data.aws_availability_zones.available.names, 0, 2)
-  # Extract role name from the ARN only if admin_role_arn is provided
-  admin_role_name = var.admin_role_arn != "" ? split("/", var.admin_role_arn)[length(split("/", var.admin_role_arn)) - 1] : ""
   tags = {
     Blueprint  = var.cluster_name
     GithubRepo = "github.com/aws-ia/terraform-aws-eks-blueprints"
@@ -197,12 +195,7 @@ module "eks" {
 
   manage_aws_auth_configmap = true
   aws_auth_roles = flatten([
-    module.eks_blueprints_admin_team.aws_auth_configmap_role,
-    var.admin_role_arn != "" ? [{
-      rolearn  = var.admin_role_arn
-      username = local.admin_role_name
-      groups   = ["system:masters"]
-    }] : []
+    module.eks_blueprints_admin_team.aws_auth_configmap_role
   ])
 
   tags = local.tags
@@ -284,32 +277,5 @@ resource "null_resource" "kubectl" {
   depends_on = [module.eks]
   provisioner "local-exec" {
     command = "aws eks --region ${var.cluster_region}  update-kubeconfig --name ${var.cluster_name}"
-  }
-}
-
-# Add admin role using eksctl as a fallback
-resource "null_resource" "update_aws_auth_eksctl" {
-  # Only run this if admin_role_arn is provided
-  count = var.admin_role_arn != "" ? 1 : 0
-  
-  depends_on = [null_resource.kubectl]
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      # Extract role name from ARN
-      ROLE_NAME=$(echo "${var.admin_role_arn}" | sed 's/.*role\///')
-      
-      # Check if eksctl is installed
-      if command -v eksctl &> /dev/null; then
-        eksctl create iamidentitymapping \
-          --cluster ${var.cluster_name} \
-          --region ${var.cluster_region} \
-          --arn ${var.admin_role_arn} \
-          --group system:masters \
-          --username $ROLE_NAME
-      else
-        echo "eksctl not found, skipping direct iamidentitymapping creation"
-      fi
-    EOT
   }
 }
