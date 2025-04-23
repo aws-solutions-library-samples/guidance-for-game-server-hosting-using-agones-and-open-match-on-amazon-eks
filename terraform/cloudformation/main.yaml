@@ -451,6 +451,7 @@ Resources:
                   - eks:ListUpdates
                   - eks:DescribeUpdate
                   - eks:AccessKubernetesApi
+                  - eks:DescribeClusterVersions
                 Resource: "*"
               - Effect: Allow
                 Action:
