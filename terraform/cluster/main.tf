@@ -11,6 +11,7 @@ module "cluster1" {
   agones_system_mng_uses_arm_based_instances  = var.agones_system_arm_based_instances_cluster_1
   agones_metrics_mng_uses_arm_based_instances = var.agones_metrics_arm_based_instances_cluster_1
   admin_role_arn                              = var.admin_role_arn_from_cloudformation
+  codebuild_role_arn                          = var.codebuild_role_arn_from_cloudformation
 }
 module "cluster2" {
   source                                      = "./modules/cluster"
@@ -23,6 +24,7 @@ module "cluster2" {
   agones_system_mng_uses_arm_based_instances  = var.agones_system_arm_based_instances_cluster_2
   agones_metrics_mng_uses_arm_based_instances = var.agones_metrics_arm_based_instances_cluster_2
   admin_role_arn                              = var.admin_role_arn_from_cloudformation
+  codebuild_role_arn                          = var.codebuild_role_arn_from_cloudformation
 }
 #--------------------------------------------------------------
 # Adding guidance solution ID via AWS CloudFormation resource

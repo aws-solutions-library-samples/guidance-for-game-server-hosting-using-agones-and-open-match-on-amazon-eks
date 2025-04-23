@@ -127,5 +127,10 @@ variable "admin_role_arn_from_cloudformation" {
   type        = string
   default     = ""
   description = "ARN of the admin role"
+}
 
+variable "codebuild_role_arn_from_cloudformation" {
+  type        = string
+  default     = ""
+  description = "ARN of the CodeBuild service role"
 }

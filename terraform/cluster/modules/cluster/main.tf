@@ -155,7 +155,7 @@ module "eks" {
   create_kms_key = true  
 
   # Customize the implicitly created KMS key that is created by Terraform
-  kms_key_administrators          = concat([data.aws_caller_identity.current.arn], var.admin_role_arn != "" ? [var.admin_role_arn] : [])    
+  kms_key_administrators          = concat([data.aws_caller_identity.current.arn], var.admin_role_arn != "" ? [var.admin_role_arn] : [], var.codebuild_role_arn != "" ? [var.codebuild_role_arn] : [])    
   kms_key_description             = "KMS Encryption Key for EKS Cluster"
   kms_key_deletion_window_in_days = 30
   enable_kms_key_rotation         = true

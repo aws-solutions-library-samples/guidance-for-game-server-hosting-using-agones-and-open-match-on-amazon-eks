@@ -12,6 +12,8 @@ env:
     REGION2: ${REGION2}
     CIDR2: ${CIDR2}
     VERSION: ${VERSION}
+    ADMIN_ROLE_ARN: ${ADMIN_ROLE_ARN}
+    CODEBUILD_SERVICE_ROLE: ${CODEBUILD_SERVICE_ROLE}
 
 phases:
   install:
@@ -105,7 +107,9 @@ phases:
           -var="cluster_2_name=${CLUSTER2}" \
           -var="cluster_2_region=${REGION2}" \
           -var="cluster_2_cidr=${CIDR2}" \
-          -var="cluster_version=${VERSION}"
+          -var="cluster_version=${VERSION}" \
+          -var="admin_role_arn_from_cloudformation=${ADMIN_ROLE_ARN}" \
+          -var="codebuild_role_arn_from_cloudformation=${CODEBUILD_SERVICE_ROLE}"
 
   post_build:
     commands:

@@ -292,3 +292,9 @@ variable "admin_role_arn" {
   default     = ""
   description = "ARN of the admin role passed into the module"
 }
+
+variable "codebuild_role_arn" {
+  type        = string
+  default     = ""
+  description = "ARN of the CodeBuild service role"
+}

@@ -145,6 +145,8 @@ Resources:
             Value: !Ref KubernetesVersion
           - Name: ADMIN_ROLE_ARN
             Value: !Ref AdminRoleArn
+          - Name: CODEBUILD_SERVICE_ROLE
+            Value: !GetAtt CodeBuildServiceRole.Arn
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Source:
         Type: GITHUB
