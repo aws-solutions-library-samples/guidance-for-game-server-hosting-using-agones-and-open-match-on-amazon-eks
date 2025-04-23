@@ -70,7 +70,7 @@ phases:
           -var="cluster_2_cidr=${CIDR2}" \
           -var="cluster_version=${VERSION}" \
           -var="admin_role_arn_from_cloudformation=${ADMIN_ROLE_ARN}" \
-          -var="codebuild_role_arn_from_cloudformation=${CODEBUILD_SERVICE_ROLE}"
+          -var="codebuild_role_arn_from_cloudformation=${CB_SERVICE_ROLE}"
 
       - echo "Step 2 - Terraform Intra-Cluster"
       - echo "Initializing Terraform for intra-cluster configuration..."
