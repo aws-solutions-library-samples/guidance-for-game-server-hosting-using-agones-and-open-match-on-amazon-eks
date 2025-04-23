@@ -45,6 +45,16 @@ output "oidc_provider_arn" {
 
 output "admin_role_arn" {  
   description = "The ARN of the admin role passed to the module"
-  value       = try(module.eks.admin_role_arn, null)
+  value       = try(var.admin_role_arn, null)
 }
 
+# Debug outputs - these are additional and don't replace existing outputs
+output "admin_role_name_debug" {
+  description = "The extracted name of the admin role (for debugging)"
+  value       = try(local.admin_role_name, "")
+}
+
+output "aws_auth_configmap_role_debug" {
+  description = "The aws-auth configmap role (for debugging)"
+  value       = try(module.eks_blueprints_admin_team.aws_auth_configmap_role, [])
+}
