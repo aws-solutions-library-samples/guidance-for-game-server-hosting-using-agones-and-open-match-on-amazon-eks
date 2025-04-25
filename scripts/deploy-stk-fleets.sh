@@ -11,6 +11,7 @@ export REGISTRY=${ACCOUNT_ID}.dkr.ecr.${REGION1}.amazonaws.com
 export ARCHITECTURE=$5
 
 echo "Fetching necessary files"
+mkdir integration/clients/stk-server-build
 curl -L -o integration/clients/stk-server-build/Dockerfile https://raw.githubusercontent.com/googleforgames/agones/refs/heads/main/examples/supertuxkart/Dockerfile
 curl -L -o integration/clients/stk-server-build/entrypoint.sh https://raw.githubusercontent.com/googleforgames/agones/refs/heads/main/examples/supertuxkart/entrypoint.sh
 curl -L -o integration/clients/stk-server-build/go.mod https://raw.githubusercontent.com/googleforgames/agones/refs/heads/main/examples/supertuxkart/go.mod
