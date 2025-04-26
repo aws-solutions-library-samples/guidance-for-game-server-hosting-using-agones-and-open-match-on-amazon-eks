@@ -32,7 +32,7 @@ variable "open_match" {
 
 variable "cluster_version" {
   type    = string
-  default = "1.28"
+  default = "1.32"
 }
 
 # Variable for ensuring that all available Managed Node Groups (MNGs) use arm-based instances

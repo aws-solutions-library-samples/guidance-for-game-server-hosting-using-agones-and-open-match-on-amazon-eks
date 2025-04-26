@@ -194,6 +194,14 @@ Currently, the following list shows all available configurable variables for cre
 
 Unfortunately, open match does not have an arm-based container image. Hence why the managed node groups that help run openmatch are not available for architecture configuration.
 
+### EKS clusters kube config
+Run the following commands to retrieve or refresh the EKS clusters kubernetes configuration file. That step is needed for the Terraform local provisioner execution to succeed in the intra-cluster deployment step.
+
+```bash
+aws eks update-kubeconfig --name $CLUSTER1 --region $REGION1
+aws eks update-kubeconfig --name $CLUSTER2 --region $REGION2
+```
+
 ### terraform/intra-cluster
 The commands below will deploy our resources inside the clusters created in the last step. We use the output values from `terraform/cluster` as input to the `terraform/intra-cluster` module.
 ```bash
