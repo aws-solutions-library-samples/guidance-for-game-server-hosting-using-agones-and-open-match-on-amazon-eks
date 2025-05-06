@@ -477,11 +477,14 @@ To deploy using the CloudFormation template:
 6. Review the configuration and acknowledge that CloudFormation might create IAM resources
 7. Choose "Create stack"
 
-> **Note:** Before deploying, you must create a CodeStar connection to GitHub. To do this:
+> ℹ️ **Note:** Before deploying, you must create a CodeStar connection to GitHub. To do this:
 > 1. Navigate to the AWS Developer Tools console
 > 2. Select "Settings" > "Connections" > "Create connection"
 > 3. Choose GitHub as the provider and follow the prompts to authorize AWS to access your GitHub account
 > 4. Once the connection is created, use its ARN for the `CodeStarConnectionArn` parameter
+>
+> 💡 **Tip:** For more detailed step by step directions on creating a CodeStar connection to GitHub please see the documentation: https://docs.aws.amazon.com/dtconsole/latest/userguide/connections-create-github.html#connections-create-github-console
+
 
 ### Monitoring the Deployment
 
