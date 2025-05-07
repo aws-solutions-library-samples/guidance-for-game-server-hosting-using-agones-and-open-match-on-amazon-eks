@@ -286,3 +286,15 @@ variable "gameserver_maxport" {
 variable "open_match" {
   type = bool
 }
+
+variable "admin_role_arn" {
+  type        = string
+  default     = ""
+  description = "ARN of the admin role passed into the module"
+}
+
+variable "codebuild_role_arn" {
+  type        = string
+  default     = ""
+  description = "ARN of the CodeBuild service role"
+}

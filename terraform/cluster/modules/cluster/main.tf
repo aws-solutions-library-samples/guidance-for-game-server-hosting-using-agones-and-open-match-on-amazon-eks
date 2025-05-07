@@ -7,6 +7,8 @@ locals {
   open_match_subnet_ids       = slice(module.vpc.private_subnets, 6, 8)
   agones_openmatch_subnet_ids = slice(module.vpc.private_subnets, 8, 10)
   azs                         = slice(data.aws_availability_zones.available.names, 0, 2)
+  # Extract role name from the ARN only if admin_role_arn is provided
+  admin_role_name = var.admin_role_arn != "" ? split("/", var.admin_role_arn)[length(split("/", var.admin_role_arn)) - 1] : ""
   tags = {
     Blueprint  = var.cluster_name
     GithubRepo = "github.com/aws-ia/terraform-aws-eks-blueprints"
@@ -56,8 +58,10 @@ module "eks" {
   source                         = "terraform-aws-modules/eks/aws"
   version                        = "~> 19.20"
   cluster_name                   = var.cluster_name
-  cluster_version                = var.cluster_version
-  cluster_endpoint_public_access = true
+  cluster_version                = var.cluster_version  
+  cluster_endpoint_public_access = true  
+
+  
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
@@ -99,6 +103,7 @@ module "eks" {
       desired_size = var.agones_system_desired_size
 
       subnet_ids = slice(module.vpc.private_subnets, 0, 3)
+
     }
     agones_metrics = {
       instance_types = local.agones_metrics_instance_types
@@ -146,6 +151,15 @@ module "eks" {
     }
   }
 
+  # Keep create_kms_key as true (or omit it, as it's true by default)
+  create_kms_key = true  
+
+  # Customize the implicitly created KMS key that is created by Terraform
+  kms_key_administrators          = concat([data.aws_caller_identity.current.arn], var.admin_role_arn != "" ? [var.admin_role_arn] : [], var.codebuild_role_arn != "" ? [var.codebuild_role_arn] : [])    
+  kms_key_description             = "KMS Encryption Key for EKS Cluster"
+  kms_key_deletion_window_in_days = 30
+  enable_kms_key_rotation         = true
+
   eks_managed_node_group_defaults = {
     iam_role_additional_policies = {
       AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
@@ -183,13 +197,16 @@ module "eks" {
 
   manage_aws_auth_configmap = true
   aws_auth_roles = flatten([
-    module.eks_blueprints_admin_team.aws_auth_configmap_role
+    module.eks_blueprints_admin_team.aws_auth_configmap_role,
+    var.admin_role_arn != "" ? [{
+      rolearn  = var.admin_role_arn
+      username = local.admin_role_name
+      groups   = ["system:masters"]
+    }] : []
   ])
 
   tags = local.tags
 }
-
-
 
 ################################################################################
 # Supporting Resources
@@ -204,12 +221,12 @@ module "vpc" {
   cidr = var.cluster_cidr
 
   azs                     = local.azs
-  private_subnets         = concat([for k, v in local.azs : cidrsubnet(var.cluster_cidr, 6, k)], 
-                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 8)],
-                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 16)],
-                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 24)],
-                                   [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 32)]
-                            )
+  private_subnets         = concat([for k, v in local.azs : cidrsubnet(var.cluster_cidr, 6, k)],
+    [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 8)],
+    [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 16)],
+    [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 24)],
+    [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 32)]
+  )
   public_subnets          = [for k, v in local.azs : cidrsubnet(var.cluster_cidr, 8, k + 56)]
   map_public_ip_on_launch = true
 
@@ -240,7 +257,10 @@ module "eks_blueprints_admin_team" {
   name = "admin-team"
 
   enable_admin = true
-  users        = [data.aws_caller_identity.current.arn]
+  users = concat(
+    [data.aws_caller_identity.current.arn], # Adds the current user running Terraform (e.g. Administrator, CodeBuild, etc. )
+    var.admin_role_arn != "" ? [var.admin_role_arn] : [] # Adds an optional Admin user ARN (Ideal for when Terraform is being run by CodeBuild as the current user)
+  )
   cluster_arn  = module.eks.cluster_arn
 
   tags = local.tags
@@ -264,5 +284,32 @@ resource "null_resource" "kubectl" {
   depends_on = [module.eks]
   provisioner "local-exec" {
     command = "aws eks --region ${var.cluster_region}  update-kubeconfig --name ${var.cluster_name}"
+  }
+}
+
+# Add admin role using eksctl as a fallback
+resource "null_resource" "update_aws_auth_eksctl" {
+  # Only run this if admin_role_arn is provided
+  count = var.admin_role_arn != "" ? 1 : 0
+  
+  depends_on = [null_resource.kubectl]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      # Extract role name from ARN
+      ROLE_NAME=$(echo "${var.admin_role_arn}" | sed 's/.*role\///')
+      
+      # Check if eksctl is installed
+      if command -v eksctl &> /dev/null; then
+        eksctl create iamidentitymapping \
+          --cluster ${var.cluster_name} \
+          --region ${var.cluster_region} \
+          --arn ${var.admin_role_arn} \
+          --group system:masters \
+          --username $ROLE_NAME
+      else
+        echo "eksctl not found, skipping direct iamidentitymapping creation"
+      fi
+    EOT
   }
 }

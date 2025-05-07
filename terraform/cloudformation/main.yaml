@@ -1,0 +1,739 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AWS CloudFormation template for guidance for game server hosting using agones and open match on amazon eks"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Agones Open Match EKS (AGOE) Configuration"
+        Parameters:
+          - VpcCIDR
+          - PublicSubnetCIDR
+          - RepositoryLocation
+          - Cluster1Name
+          - Cluster1Region
+          - Cluster1CIDR
+          - Cluster2Name
+          - Cluster2Region
+          - Cluster2CIDR
+          - KubernetesVersion
+          - AdminRoleArn
+    ParameterLabels:
+      VpcCIDR:
+        default: "AGOE VPC CIDR"
+      PublicSubnetCIDR:
+        default: "AGOE Public Subnet CIDR"
+      RepositoryLocation:
+        default: "AGOE Repository Location"
+      Cluster1Name:
+        default: "AGOE Cluster 1 Name"
+      Cluster1Region:
+        default: "AGOE Cluster 1 Region"
+      Cluster1CIDR:
+        default: "AGOE Cluster 1 CIDR"
+      Cluster2Name:
+        default: "AGOE Cluster 2 Name"
+      Cluster2Region:
+        default: "AGOE Cluster 2 Region"
+      Cluster2CIDR:
+        default: "AGOE Cluster 2 CIDR"
+      KubernetesVersion:
+        default: "AGOE Kubernetes Version"
+      CodeStarConnectionArn:
+        default: "AGOE CodeStar Connection ARN"
+      RepositoryOwner:
+        default: "AGOE Repository Owner"
+      RepositoryName:
+        default: "AGOE Repository Name"
+      AdminRoleArn:
+        default: "AGOE Admin Role ARN"
+
+Parameters:
+  VpcCIDR:
+    Type: String
+    Default: 10.192.0.0/16
+  PublicSubnetCIDR:
+    Type: String
+    Default: 10.192.10.0/24
+  CodeStarConnectionArn:
+    Type: String
+    Description: "CodeStar connection ARN for GitHub (required)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "CodeStar Connection ARN cannot be empty"
+  RepositoryLocation:
+    Type: String
+    Default: "https://github.com/aws-solutions-library-samples/guidance-for-game-server-hosting-using-agones-and-open-match-on-amazon-eks.git"
+    Description: "The location of the GitHub repository (required)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "Repository Location cannot be empty"
+  Cluster1Name:
+    Type: String
+    Default: agones-gameservers-1
+    Description: "Name of the first EKS cluster"
+  Cluster1Region:
+    Type: String
+    Default: us-east-1
+    Description: "Region for the first EKS cluster"
+  Cluster1CIDR:
+    Type: String
+    Default: "10.1.0.0/16"
+    Description: "CIDR block for the first EKS cluster VPC"
+  Cluster2Name:
+    Type: String
+    Default: agones-gameservers-2
+    Description: "Name of the second EKS cluster"
+  Cluster2Region:
+    Type: String
+    Default: us-east-2
+    Description: "Region for the second EKS cluster"
+  Cluster2CIDR:
+    Type: String
+    Default: "10.2.0.0/16"
+    Description: "CIDR block for the second EKS cluster VPC"
+  KubernetesVersion:
+    Type: String
+    Default: "1.28"
+    Description: "Kubernetes version for the EKS clusters"
+  RepositoryOwner:
+    Type: String
+    Default: aws-solutions-library-samples
+    Description: "The owner of the Git repository (required)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "Repository Owner cannot be empty"  
+  RepositoryName:
+    Type: String
+    Default: guidance-for-game-server-hosting-using-agones-and-open-match-on-amazon-eks
+    Description: "The name of the Git repository"
+  AdminRoleArn:
+    Type: String
+    Description: "The ARN of the admin role (required)"
+    AllowedPattern: ".+"
+    ConstraintDescription: "Admin Role ARN cannot be empty"
+
+Resources:
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub AGOE-CodeBuild-${AWS::AccountId}-${AWS::Region}
+      Artifacts:
+        Type: S3
+        Location: !Ref CodeBuildArtifactsBucket
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_LARGE
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: TERRAFORM_STATE_BUCKET
+            Type: PLAINTEXT
+            Value: !Ref TerraformStateBucket
+          - Name: TERRAFORM_DYNAMO_TABLE
+            Value: !Ref TerraformDynamoDBLockTable
+          - Name: TF_STATE_KEY
+            Value: terraform.tfstate
+          - Name: CLUSTER1
+            Value: !Ref Cluster1Name
+          - Name: REGION1
+            Value: !Ref Cluster1Region
+          - Name: CIDR1
+            Value: !Ref Cluster1CIDR
+          - Name: CLUSTER2
+            Value: !Ref Cluster2Name
+          - Name: REGION2
+            Value: !Ref Cluster2Region
+          - Name: CIDR2
+            Value: !Ref Cluster2CIDR
+          - Name: VERSION
+            Value: !Ref KubernetesVersion
+          - Name: ADMIN_ROLE_ARN
+            Value: !Ref AdminRoleArn
+          - Name: CB_SERVICE_ROLE
+            Value: !GetAtt CodeBuildServiceRole.Arn
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Source:
+        Type: GITHUB
+        Location: !Ref RepositoryLocation        
+        BuildSpec: terraform/cloudformation/buildspec.yml
+
+  CodeBuildArtifactsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub agoe-artifacts-${AWS::AccountId}-${AWS::Region}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  CodeBuildArtifactsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CodeBuildArtifactsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowSSLRequestsOnly
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt CodeBuildArtifactsBucket.Arn
+              - !Sub ${CodeBuildArtifactsBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+          - Sid: AllowListBucketVersions
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EmptyS3BucketsRole.Arn
+            Action:
+              - s3:ListBucket
+              - s3:ListBucketVersions
+              - s3:GetBucketLocation
+            Resource: !GetAtt CodeBuildArtifactsBucket.Arn
+          - Sid: AllowObjectOperations
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EmptyS3BucketsRole.Arn
+            Action:
+              - s3:DeleteObject
+              - s3:DeleteObjectVersion
+            Resource: !Sub ${CodeBuildArtifactsBucket.Arn}/*
+
+  CodePipelineProject:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub AGOE-CodePipeline-${AWS::AccountId}-${AWS::Region}
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref CodeBuildArtifactsBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeStarSourceConnection
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnectionArn
+                FullRepositoryId: !Join
+                  - "/"
+                  - - !Ref RepositoryOwner
+                    - !Ref RepositoryName
+                BranchName: main
+              OutputArtifacts:
+                - Name: AdminSourceArtifact
+        - Name: Build
+          Actions:
+            - Name: CodeBuild
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              InputArtifacts:
+                - Name: AdminSourceArtifact
+              OutputArtifacts:
+                - Name: FinalSourceArtifacts
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+                PrimarySource: AdminSourceArtifact
+
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:GetRole
+                Resource: "*"
+              # Action for CodeStar connection for GitHub (pre-requisite setup required)
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                Resource: !Ref CodeStarConnectionArn
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource: !GetAtt CodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/*
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/*:log-stream:*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+                  - s3:PutObject
+                Resource:
+                  - !GetAtt CodeBuildArtifactsBucket.Arn
+                  - !Sub ${CodeBuildArtifactsBucket.Arn}/*
+
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - autoscaling:DescribeAutoScalingGroups
+                  - autoscaling:UpdateAutoScalingGroup
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ec2:AttachNetworkInterface
+                  - ec2:CreateNetworkInterface
+                  - ec2:CreateSecurityGroup
+                  - ec2:DeleteNetworkInterface
+                  - ec2:DeleteSecurityGroup
+                  - ec2:DescribeInstances
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcs
+                  - ec2:DetachNetworkInterface
+                  - ec2:ModifyInstanceAttribute
+                  - ec2:ModifyNetworkInterfaceAttribute
+                  - ec2:AssumeRole
+                  - ec2:DeleteVpc
+                  - ec2:DeleteSubnet
+                  - ec2:DeleteRouteTable
+                  - ec2:DeleteInternetGateway
+                  - ec2:DetachInternetGateway
+                  - ec2:DeleteNatGateway
+                  - ec2:ReleaseAddress
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:CreateRepository
+                  - ecr:DescribeRepositories
+                  - ecr:DescribeRegistry
+                  - ecr:TagResource
+                  - ecr:DescribeImages
+                  - ecr:DescribeImageScanFindings
+                  - ecr:DescribeImageTags
+                  - ecr:GetLifecyclePolicyPreview
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutReplicationConfiguration
+                  - ecr:ListImages
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:ListTagsForResource
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - globalaccelerator:CreateAccelerator
+                  - globalaccelerator:DeleteAccelerator
+                  - globalaccelerator:DescribeAccelerator
+                  - globalaccelerator:DescribeAcceleratorAttributes
+                  - globalaccelerator:ListAccelerators
+                  - globalaccelerator:UpdateAccelerator
+                  - globalaccelerator:UpdateAcceleratorAttributes
+                  - globalaccelerator:CreateEndpointGroup
+                  - globalaccelerator:DeleteEndpointGroup
+                  - globalaccelerator:DescribeEndpointGroup
+                  - globalaccelerator:UpdateEndpointGroup
+                  - globalaccelerator:CreateListener
+                  - globalaccelerator:DeleteListener
+                  - globalaccelerator:DescribeListener
+                  - globalaccelerator:UpdateListener
+                  - globalaccelerator:ListListeners
+                  - globalaccelerator:CreateCustomRoutingAccelerator
+                  - globalaccelerator:CreateCustomRoutingListener
+                  - globalaccelerator:DeleteCustomRoutingAccelerator
+                  - globalaccelerator:DeleteCustomRoutingListener
+                  - globalaccelerator:DescribeCustomRoutingAccelerator
+                  - globalaccelerator:DescribeCustomRoutingListener
+                  - globalaccelerator:UpdateCustomRoutingAccelerator
+                  - globalaccelerator:UpdateCustomRoutingListener
+                  - globalaccelerator:ListCustomRoutingAccelerators
+                  - globalaccelerator:ListCustomRoutingListeners
+                  - globalaccelerator:ListCustomRoutingPortMappings
+                  - globalaccelerator:ListCustomRoutingPortMappingsByDestination
+                  - globalaccelerator:ListTagsForResource
+                  - globalaccelerator:TagResource
+                  - globalaccelerator:UntagResource
+                  - globalaccelerator:DescribeCustomRoutingAcceleratorAttributes
+                  - globalaccelerator:UpdateCustomRoutingAcceleratorAttributes
+                  - globalaccelerator:CreateCustomRoutingEndpointGroup
+                  - globalaccelerator:DeleteCustomRoutingEndpointGroup
+                  - globalaccelerator:DescribeCustomRoutingEndpointGroup
+                  - globalaccelerator:UpdateCustomRoutingEndpointGroup
+                  - globalaccelerator:ListCustomRoutingEndpointGroups
+                  - globalaccelerator:ListCustomRoutingPortMappings
+                  - globalaccelerator:ListCustomRoutingPortMappingsByDestination
+                  - globalaccelerator:AddCustomRoutingEndpoints
+                  - globalaccelerator:RemoveCustomRoutingEndpoints
+                  - globalaccelerator:DescribeCustomRoutingEndpoint
+                  - globalaccelerator:UpdateCustomRoutingEndpoint
+                  - globalaccelerator:ListCustomRoutingEndpoints
+                  - globalaccelerator:CreateRoutingPosition
+                  - globalaccelerator:DeleteRoutingPosition
+                  - globalaccelerator:DescribeRoutingPosition
+                  - globalaccelerator:UpdateRoutingPosition
+                  - globalaccelerator:ListRoutingPositions
+                  - globalaccelerator:ListRoutingPositionsWithInternalStatus
+                  - globalaccelerator:AllowCustomRoutingTraffic
+                  - globalaccelerator:RemoveCustomRoutingTraffic
+                  - globalaccelerator:ListCustomRoutingTraffic
+                  - globalaccelerator:DescribeCustomRoutingTraffic
+                  - globalaccelerator:UpdateCustomRoutingTraffic
+                  - globalaccelerator:ListCrossAccountResources
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - eks:CreateCluster
+                  - eks:DescribeCluster
+                  - eks:UpdateClusterVersion
+                  - eks:UpdateClusterConfig
+                  - eks:DeleteCluster
+                  - eks:TagResource
+                  - eks:CreateNodegroup
+                  - eks:DescribeNodegroup
+                  - eks:DeleteNodegroup
+                  - eks:ListClusters
+                  - eks:DescribeAddon
+                  - eks:DescribeAddonVersions
+                  - eks:CreateAddon
+                  - eks:DeleteAddon
+                  - eks:UpdateAddon
+                  - eks:ListAddons
+                  - eks:ListIdentityProviderConfigs
+                  - eks:ListNodegroups
+                  - eks:ListUpdates
+                  - eks:DescribeUpdate
+                  - eks:AccessKubernetesApi
+                  - eks:DescribeClusterVersions
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - iam:GetRole
+                  - iam:CreateRole
+                  - iam:TagRole
+                  - iam:ListRolePolicies
+                  - iam:PutRolePolicy
+                  - iam:ListAttachedRolePolicies
+                  - iam:GetRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:CreatePolicy
+                  - iam:TagPolicy
+                  - iam:GetPolicy
+                  - iam:GetPolicyVersion
+                  - iam:CreateServiceLinkedRole
+                  - iam:PassRole
+                  - iam:DetachRolePolicy
+                  - iam:ListInstanceProfilesForRole
+                  - iam:DeleteRole
+                  - iam:ListPolicyVersions
+                  - iam:DeletePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:CreateOpenIDConnectProvider
+                  - iam:TagOpenIDConnectProvider
+                  - iam:GetOpenIDConnectProvider
+                  - iam:DeleteOpenIDConnectProvider
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:CreatePolicyVersion
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - kms:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DeleteStack
+                  - cloudformation:GetTemplate
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:TagResource
+                  - logs:PutRetentionPolicy
+                  - logs:DescribeLogGroups
+                  - logs:ListTagsForResource
+                  - logs:DeleteLogGroup
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !GetAtt CodeBuildArtifactsBucket.Arn
+                  - !Sub ${CodeBuildArtifactsBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !GetAtt TerraformStateBucket.Arn
+                  - !Sub ${TerraformStateBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:DescribeTable
+                Resource: !GetAtt TerraformDynamoDBLockTable.Arn
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                  - codestar-connections:*
+                Resource: "*"
+
+  TerraformStateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub agoe-state-bucket-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  EmptyS3BucketsFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: EmptyS3BucketsRole
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt EmptyS3BucketsRole.Arn
+      FunctionName: !Sub EmptyS3BucketsFunction-${AWS::Region}
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def delete_bucket_contents(bucket_name):
+              s3 = boto3.resource('s3')
+              bucket = s3.Bucket(bucket_name)
+              try:
+                  bucket.objects.all().delete()
+                  bucket.object_versions.all().delete()
+                  logger.info(f'Successfully emptied bucket: {bucket_name}')
+              except Exception as e:
+                  logger.error(f'Error emptying bucket {bucket_name}: {str(e)}')
+                  raise
+
+          def delete_log_group(function_name):
+              logs_client = boto3.client('logs')
+              log_group_name = f'/aws/lambda/{function_name}'
+              try:
+                  logs_client.delete_log_group(logGroupName=log_group_name)
+                  logger.info(f'Successfully deleted log group: {log_group_name}')
+              except logs_client.exceptions.ResourceNotFoundException:
+                  logger.info(f'Log group {log_group_name} does not exist.')
+              except Exception as e:
+                  logger.error(f'Error deleting log group {log_group_name}: {str(e)}')
+
+          def handler(event, context):
+              logger.info('Received event: %s', event)
+              status = cfnresponse.SUCCESS
+              try:
+                  if event['RequestType'] == 'Delete':
+                      buckets = event['ResourceProperties']['BucketsToEmpty']
+                      for bucket in buckets:
+                          delete_bucket_contents(bucket)
+                      logger.info('Successfully emptied all buckets')
+                      delete_log_group(context.function_name)
+                      logger.info('Successfully deleted log group')
+              except Exception as e:
+                  logger.error('Error: %s', str(e))
+                  status = cfnresponse.FAILED
+              finally:
+                  cfnresponse.send(event, context, status, {})
+
+      Runtime: python3.12
+      Timeout: 300
+
+  EmptyS3BucketsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub EmptyS3BucketsRole-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EmptyS3BucketsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:ListBucketVersions'
+                  - 's3:DeleteObject'
+                  - 's3:DeleteObjectVersion'
+                  - 's3:GetBucketLocation'
+                Resource:
+                  - !GetAtt CodeBuildArtifactsBucket.Arn
+                  - !Sub '${CodeBuildArtifactsBucket.Arn}/*'
+                  - !GetAtt TerraformStateBucket.Arn
+                  - !Sub '${TerraformStateBucket.Arn}/*'
+                  - 'arn:aws:s3:::agoe-artifacts-*'
+                  - 'arn:aws:s3:::agoe-artifacts-*/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucketVersions'
+                Resource: 'arn:aws:s3:::agoe-artifacts-*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DeleteLogGroup'
+                Resource: 'arn:aws:logs:*:*:*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  EmptyS3BucketsCustomResource:
+    Type: Custom::EmptyS3Buckets
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketsFunction.Arn
+      RoleName: !Ref EmptyS3BucketsRole
+      BucketsToEmpty: 
+        - !Ref CodeBuildArtifactsBucket
+        - !Ref TerraformStateBucket
+    DependsOn:
+      - CodeBuildArtifactsBucket
+      - TerraformStateBucket
+      - EmptyS3BucketsRole
+      - EmptyS3BucketsFunction
+
+  TerraformStateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TerraformStateBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: !Sub ${TerraformStateBucket.Arn}/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: AES256
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !Sub ${TerraformStateBucket.Arn}
+              - !Sub ${TerraformStateBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+          - Sid: AllowListBucketVersions
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EmptyS3BucketsRole.Arn
+            Action:
+              - s3:ListBucket
+              - s3:ListBucketVersions
+              - s3:GetBucketLocation
+            Resource: !GetAtt TerraformStateBucket.Arn
+          - Sid: AllowObjectOperations
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EmptyS3BucketsRole.Arn
+            Action:
+              - s3:DeleteObject
+              - s3:DeleteObjectVersion
+            Resource: !Sub ${TerraformStateBucket.Arn}/*
+
+  TerraformDynamoDBLockTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    Properties:
+      TableName: !Sub agoe-state-table-lock
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: LockID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: LockID
+          KeyType: HASH
+
+Outputs:
+  CodeBuildProjectName:
+    Description: Name of the CodeBuild Project
+    Value: !Ref CodeBuildProject
+
+  TerraformStateBucketName:
+    Description: Name of the S3 Bucket
+    Value: !Ref TerraformStateBucket
+
+  TerraformDynamoDBLockTableName:
+    Description: Name of the DynamoDB Table
+    Value: !Ref TerraformDynamoDBLockTable
