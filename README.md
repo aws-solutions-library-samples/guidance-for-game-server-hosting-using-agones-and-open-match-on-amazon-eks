@@ -13,6 +13,7 @@
     * [Deploy Match Function and Director on the first cluster](#deploy-match-making-function-and-director-on-the-first-cluster)
     * [Test the ncat server](#test-the-ncat-server)
     * [Test with SuperTuxKart](#test-with-supertuxkart)
+- [Automated Deployment with CloudFormation](#automated-deployment-with-cloudformation)
 - [Clean Up Resources](#clean-up-resources)
 - [Security recommendations](#security-recommendations)
 
@@ -452,6 +453,8 @@ The pipeline follows the same deployment steps as the manual process:
 
 ### Deploying with CloudFormation
 
+> ⚠️ **Important:** This CloudFormation template is designed to be deployed from the us-east-1 region. Make sure that you are uploading the template to the us-east-1 region before starting your deployment. Deploying from other regions may cause resource creation failures or cross-region permission issues.
+
 To deploy using the CloudFormation template:
 
 1. Sign in to the AWS Management Console and navigate to the CloudFormation service
@@ -463,8 +466,8 @@ To deploy using the CloudFormation template:
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | CodeStarConnectionArn | ARN of the CodeStar connection to GitHub (required) | - |
-| RepositoryOwner | Owner of the GitHub repository (required) | - |
-| RepositoryLocation | URL of the GitHub repository (required) | - |
+| RepositoryOwner | Owner of the GitHub repository (required) | aws-solutions-library-samples |
+| RepositoryLocation | URL of the GitHub repository (required) | https://github.com/aws-solutions-library-samples/guidance-for-game-server-hosting-using-agones-and-open-match-on-amazon-eks.git |
 | AdminRoleArn | ARN of the admin role (required) | - |
 | Cluster1Name | Name for the first EKS cluster | agones-gameservers-1 |
 | Cluster1Region | AWS region for the first cluster | us-east-1 |
@@ -477,7 +480,7 @@ To deploy using the CloudFormation template:
 6. Review the configuration and acknowledge that CloudFormation might create IAM resources
 7. Choose "Create stack"
 
-> ℹ️ **Note:** Before deploying, you must create a CodeStar connection to GitHub. To do this:
+> ℹ️ **Note:** Before deploying, you must create a CodeStar connection to GitHub in the us-east-1 region. To do this:
 > 1. Navigate to the AWS Developer Tools console
 > 2. Select "Settings" > "Connections" > "Create connection"
 > 3. Choose GitHub as the provider and follow the prompts to authorize AWS to access your GitHub account

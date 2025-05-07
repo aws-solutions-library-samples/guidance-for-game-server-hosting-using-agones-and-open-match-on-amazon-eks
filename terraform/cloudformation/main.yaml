@@ -62,6 +62,7 @@ Parameters:
     ConstraintDescription: "CodeStar Connection ARN cannot be empty"
   RepositoryLocation:
     Type: String
+    Default: "https://github.com/aws-solutions-library-samples/guidance-for-game-server-hosting-using-agones-and-open-match-on-amazon-eks.git"
     Description: "The location of the GitHub repository (required)"
     AllowedPattern: ".+"
     ConstraintDescription: "Repository Location cannot be empty"
@@ -95,6 +96,7 @@ Parameters:
     Description: "Kubernetes version for the EKS clusters"
   RepositoryOwner:
     Type: String
+    Default: aws-solutions-library-samples
     Description: "The owner of the Git repository (required)"
     AllowedPattern: ".+"
     ConstraintDescription: "Repository Owner cannot be empty"  
