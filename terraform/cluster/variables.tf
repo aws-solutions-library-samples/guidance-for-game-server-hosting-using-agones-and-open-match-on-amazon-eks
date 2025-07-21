@@ -122,3 +122,15 @@ variable "agones_metrics_arm_based_instances_cluster_2" {
 #   type    = bool
 #   default = false
 # }
+
+variable "admin_role_arn_from_cloudformation" {
+  type        = string
+  default     = ""
+  description = "ARN of the admin role"
+}
+
+variable "codebuild_role_arn_from_cloudformation" {
+  type        = string
+  default     = ""
+  description = "ARN of the CodeBuild service role"
+}
