@@ -85,3 +85,8 @@ output "oidc_provider_2_arn" {
   description = "The ARN of the OIDC Provider if `enable_irsa = true`"
   value       = module.cluster2.oidc_provider_arn
 }
+
+output "admin_role_arn_from_cloudformation" { 
+  description = "The ARN of the admin role passed to the BuildSpec from the CloudFormation template"
+  value       = module.cluster1.admin_role_arn
+}
