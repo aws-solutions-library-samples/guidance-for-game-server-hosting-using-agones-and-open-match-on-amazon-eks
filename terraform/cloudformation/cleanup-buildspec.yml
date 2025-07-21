@@ -1,0 +1,253 @@
+version: 0.2
+
+env:
+  variables:
+    TERRAFORM_STATE_BUCKET: ${TERRAFORM_STATE_BUCKET}
+    TERRAFORM_DYNAMO_TABLE: ${TERRAFORM_DYNAMO_TABLE}
+    TF_STATE_KEY: terraform.tfstate
+    CLUSTER1: ${CLUSTER1}
+    REGION1: ${REGION1}
+    CIDR1: ${CIDR1}
+    CLUSTER2: ${CLUSTER2}
+    REGION2: ${REGION2}
+    CIDR2: ${CIDR2}
+    VERSION: ${VERSION}
+    ADMIN_ROLE_ARN: ${ADMIN_ROLE_ARN}
+    CB_SERVICE_ROLE: ${CB_SERVICE_ROLE}
+    REGION: $AWS_REGION
+    MAX_RETRIES: 5
+    RETRY_DELAY: 5
+
+phases:
+  install:
+    commands:
+      - echo Installing dependencies...
+      - sudo yum install -y yum-utils shadow-utils
+      - sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+      - sudo yum -y install terraform
+      - terraform --version
+
+      - echo "Installing jq..."
+      - sudo yum install -y jq
+
+      - echo Installing GetText...
+      - sudo yum install -y gettext
+      - gettext --version
+
+      - echo "Installing kubectl..."
+      - curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.28.0/2023-04-19/bin/linux/amd64/kubectl
+      - chmod +x ./kubectl
+      - mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$PATH:$HOME/bin
+      - echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc
+      - kubectl version --client --output=yaml
+
+      - echo "Checking OpenSSL version..."
+      - openssl version
+
+  build:
+    commands:
+      - echo "Starting cleanup process..."
+      
+      # Delete the load balancers first to avoid dependency issues
+      - |
+        echo "Deleting load balancers..."
+        aws elbv2 delete-load-balancer --region ${REGION1} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION1} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER1}-om-fe')].LoadBalancerArn" --output text) 2>/dev/null || echo "No om-fe load balancer found"
+        aws elbv2 delete-load-balancer --region ${REGION1} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION1} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER1}-allocator')].LoadBalancerArn" --output text) 2>/dev/null || echo "No allocator load balancer found in region 1"
+        aws elbv2 delete-load-balancer --region ${REGION1} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION1} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER1}-ping-http')].LoadBalancerArn" --output text) 2>/dev/null || echo "No ping-http load balancer found in region 1"
+        aws elbv2 delete-load-balancer --region ${REGION1} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION1} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER1}-ping-udp')].LoadBalancerArn" --output text) 2>/dev/null || echo "No ping-udp load balancer found in region 1"
+        aws elbv2 delete-load-balancer --region ${REGION2} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION2} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER2}-allocator')].LoadBalancerArn" --output text) 2>/dev/null || echo "No allocator load balancer found in region 2"
+        aws elbv2 delete-load-balancer --region ${REGION2} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION2} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER2}-ping-http')].LoadBalancerArn" --output text) 2>/dev/null || echo "No ping-http load balancer found in region 2"
+        aws elbv2 delete-load-balancer --region ${REGION2} --load-balancer-arn $(aws elbv2 describe-load-balancers --region ${REGION2} --query "LoadBalancers[?contains(LoadBalancerName,'${CLUSTER2}-ping-udp')].LoadBalancerArn" --output text) 2>/dev/null || echo "No ping-udp load balancer found in region 2"
+      
+      # Get the necessary values from terraform outputs
+      - |
+        echo "Initializing terraform to get output values"
+        terraform -chdir=terraform/cluster init \
+          -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+          -backend-config="key=${TF_STATE_KEY}" \
+          -backend-config="region=${AWS_REGION}" \
+          -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}" \
+          -backend-config="encrypt=true"
+        
+        # Check if terraform state exists
+        if terraform -chdir=terraform/cluster state list &>/dev/null; then
+          echo "Getting values from terraform outputs"
+          export VPC1=$(terraform -chdir=terraform/cluster output -raw vpc_1_id 2>/dev/null || echo "")
+          export ROUTE1=$(terraform -chdir=terraform/cluster output -raw private_route_table_1_id 2>/dev/null || echo "")
+          export SUBNETS1=$(terraform -chdir=terraform/cluster output gameservers_1_subnets 2>/dev/null || echo "[]")
+          export ENDPOINT1=$(terraform -chdir=terraform/cluster output -raw cluster_1_endpoint 2>/dev/null || echo "")
+          export AUTH1=$(terraform -chdir=terraform/cluster output -raw cluster_1_certificate_authority_data 2>/dev/null || echo "")
+          export TOKEN1=$(terraform -chdir=terraform/cluster output -raw cluster_1_token 2>/dev/null || echo "")
+          export VPC2=$(terraform -chdir=terraform/cluster output -raw vpc_2_id 2>/dev/null || echo "")
+          export ROUTE2=$(terraform -chdir=terraform/cluster output -raw private_route_table_2_id 2>/dev/null || echo "")
+          export SUBNETS2=$(terraform -chdir=terraform/cluster output gameservers_2_subnets 2>/dev/null || echo "[]")
+          export ENDPOINT2=$(terraform -chdir=terraform/cluster output -raw cluster_2_endpoint 2>/dev/null || echo "")
+          export AUTH2=$(terraform -chdir=terraform/cluster output -raw cluster_2_certificate_authority_data 2>/dev/null || echo "")
+          export TOKEN2=$(terraform -chdir=terraform/cluster output -raw cluster_2_token 2>/dev/null || echo "")
+          export OIDC_PROVIDER_1_ARN=$(terraform -chdir=terraform/cluster output -raw oidc_provider_1_arn 2>/dev/null || echo "")
+          export OIDC_PROVIDER_2_ARN=$(terraform -chdir=terraform/cluster output -raw oidc_provider_2_arn 2>/dev/null || echo "")
+          
+          echo "Values retrieved successfully"
+        else
+          echo "No terraform state found, skipping terraform destroy steps"
+          exit 0
+        fi
+
+      # Configure kubectl for both clusters if they exist
+      - |
+        if [ -n "$ENDPOINT1" ]; then
+          echo "Configuring kubectl for cluster 1"
+          aws eks update-kubeconfig --name ${CLUSTER1} --region ${REGION1}
+        fi
+        if [ -n "$ENDPOINT2" ]; then
+          echo "Configuring kubectl for cluster 2"
+          aws eks update-kubeconfig --name ${CLUSTER2} --region ${REGION2}
+        fi
+
+      # Destroy extra-cluster resources if they exist
+      - |
+        echo "Destroying extra-cluster resources"
+        terraform -chdir=terraform/extra-cluster init \
+          -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+          -backend-config="key=extra-cluster-${TF_STATE_KEY}" \
+          -backend-config="region=${AWS_REGION}" \
+          -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}" \
+          -backend-config="encrypt=true"
+        
+        if terraform -chdir=terraform/extra-cluster state list &>/dev/null; then
+          echo "Extra-cluster state found, destroying resources"
+          terraform -chdir=terraform/extra-cluster destroy -auto-approve \
+            -var="cluster_1_name=${CLUSTER1}" \
+            -var="requester_cidr=${CIDR1}" \
+            -var="requester_vpc_id=${VPC1}" \
+            -var="requester_route=${ROUTE1}" \
+            -var="cluster_1_gameservers_subnets=${SUBNETS1}" \
+            -var="cluster_1_endpoint=${ENDPOINT1}" \
+            -var="cluster_1_certificate_authority_data=${AUTH1}" \
+            -var="cluster_1_token=${TOKEN1}" \
+            -var="cluster_2_name=${CLUSTER2}" \
+            -var="accepter_cidr=${CIDR2}" \
+            -var="accepter_vpc_id=${VPC2}" \
+            -var="accepter_route=${ROUTE2}" \
+            -var="cluster_2_gameservers_subnets=${SUBNETS2}" \
+            -var="cluster_2_endpoint=${ENDPOINT2}" \
+            -var="cluster_2_certificate_authority_data=${AUTH2}" \
+            -var="cluster_2_token=${TOKEN2}" \
+            -var="cluster_1_region=${REGION1}" \
+            -var="ecr_region=${REGION1}" \
+            -var="cluster_2_region=${REGION2}" || echo "Failed to destroy extra-cluster resources, continuing..."
+        else
+          echo "No extra-cluster state found, skipping"
+        fi
+
+      # Destroy intra-cluster resources if they exist
+      - |
+        echo "Destroying intra-cluster resources for both clusters"
+        terraform -chdir=terraform/intra-cluster init \
+          -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
+          -backend-config="key=intra-cluster-${TF_STATE_KEY}" \
+          -backend-config="region=${AWS_REGION}" \
+          -backend-config="dynamodb_table=${TERRAFORM_DYNAMO_TABLE}" \
+          -backend-config="encrypt=true"
+        
+        # Try to destroy resources in region 1
+        if terraform -chdir=terraform/intra-cluster workspace select ${REGION1} &>/dev/null; then
+          if terraform -chdir=terraform/intra-cluster state list &>/dev/null; then
+            echo "Intra-cluster state found for region 1, destroying resources"
+            terraform -chdir=terraform/intra-cluster destroy -auto-approve \
+              -var="cluster_name=${CLUSTER1}" \
+              -var="cluster_region=${REGION1}" \
+              -var="cluster_endpoint=${ENDPOINT1}" \
+              -var="cluster_certificate_authority_data=${AUTH1}" \
+              -var="cluster_token=${TOKEN1}" \
+              -var="cluster_version=${VERSION}" \
+              -var="oidc_provider_arn=${OIDC_PROVIDER_1_ARN}" \
+              -var="namespaces=[\"agones-openmatch\", \"agones-system\", \"gameservers\", \"open-match\"]" \
+              -var="configure_agones=true" \
+              -var="configure_open_match=true" || echo "Failed to destroy intra-cluster resources for region 1, continuing..."
+          else
+            echo "No intra-cluster state found for region 1, skipping"
+          fi
+        else
+          echo "No workspace for region 1, trying to create it"
+          terraform -chdir=terraform/intra-cluster workspace new ${REGION1} || echo "Failed to create workspace for region 1, skipping"
+        fi
+        
+        # Try to destroy resources in region 2
+        if terraform -chdir=terraform/intra-cluster workspace select ${REGION2} &>/dev/null; then
+          if terraform -chdir=terraform/intra-cluster state list &>/dev/null; then
+            echo "Intra-cluster state found for region 2, destroying resources"
+            terraform -chdir=terraform/intra-cluster destroy -auto-approve \
+              -var="cluster_name=${CLUSTER2}" \
+              -var="cluster_region=${REGION2}" \
+              -var="cluster_endpoint=${ENDPOINT2}" \
+              -var="cluster_certificate_authority_data=${AUTH2}" \
+              -var="cluster_token=${TOKEN2}" \
+              -var="cluster_version=${VERSION}" \
+              -var="oidc_provider_arn=${OIDC_PROVIDER_2_ARN}" \
+              -var="namespaces=[\"agones-system\", \"gameservers\"]" \
+              -var="configure_agones=true" \
+              -var="configure_open_match=false" || echo "Failed to destroy intra-cluster resources for region 2, continuing..."
+          else
+            echo "No intra-cluster state found for region 2, skipping"
+          fi
+        else
+          echo "No workspace for region 2, trying to create it"
+          terraform -chdir=terraform/intra-cluster workspace new ${REGION2} || echo "Failed to create workspace for region 2, skipping"
+        fi
+
+      # Destroy the clusters if they exist
+      - |
+        echo "Destroying the clusters"
+        if terraform -chdir=terraform/cluster state list &>/dev/null; then
+          echo "Cluster state found, destroying resources"
+          terraform -chdir=terraform/cluster destroy -auto-approve \
+            -var="cluster_1_name=${CLUSTER1}" \
+            -var="cluster_1_region=${REGION1}" \
+            -var="cluster_1_cidr=${CIDR1}" \
+            -var="cluster_2_name=${CLUSTER2}" \
+            -var="cluster_2_region=${REGION2}" \
+            -var="cluster_2_cidr=${CIDR2}" \
+            -var="cluster_version=${VERSION}" \
+            -var="admin_role_arn_from_cloudformation=${ADMIN_ROLE_ARN}" \
+            -var="codebuild_role_arn_from_cloudformation=${CB_SERVICE_ROLE}" || echo "Failed to destroy clusters, continuing..."
+        else
+          echo "No cluster state found, skipping"
+        fi
+
+      # Delete security groups if needed
+      - |
+        echo "Checking for remaining security groups..."
+        # For cluster 1
+        VPC_ID=$(aws ec2 describe-vpcs --region ${REGION1} --filters "Name=tag:Name,Values='${CLUSTER1}'" --query Vpcs[].VpcId --output text)
+        if [ -n "$VPC_ID" ]; then
+          echo "Found VPC $VPC_ID for cluster 1, deleting security groups"
+          for sg in $(aws ec2 describe-security-groups --region ${REGION1} --filters "Name=vpc-id,Values=$VPC_ID" --query SecurityGroups[].GroupId --output text); do 
+            echo "Deleting security group $sg in region ${REGION1}"
+            aws ec2 delete-security-group --region ${REGION1} --group-id $sg || echo "Failed to delete security group $sg, continuing..."
+          done
+        else
+          echo "No VPC found for cluster 1, skipping security group deletion"
+        fi
+        
+        # For cluster 2
+        VPC_ID=$(aws ec2 describe-vpcs --region ${REGION2} --filters "Name=tag:Name,Values='${CLUSTER2}'" --query Vpcs[].VpcId --output text)
+        if [ -n "$VPC_ID" ]; then
+          echo "Found VPC $VPC_ID for cluster 2, deleting security groups"
+          for sg in $(aws ec2 describe-security-groups --region ${REGION2} --filters "Name=vpc-id,Values=$VPC_ID" --query SecurityGroups[].GroupId --output text); do 
+            echo "Deleting security group $sg in region ${REGION2}"
+            aws ec2 delete-security-group --region ${REGION2} --group-id $sg || echo "Failed to delete security group $sg, continuing..."
+          done
+        else
+          echo "No VPC found for cluster 2, skipping security group deletion"
+        fi
+
+      # Remove the clusters from kubectl config
+      - |
+        echo "Removing clusters from kubectl config..."
+        kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1}) 2>/dev/null || echo "No kubectl context found for cluster 1"
+        kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER2}) 2>/dev/null || echo "No kubectl context found for cluster 2"
+
+  post_build:
+    commands:
+      - echo "Cleanup completed on $(date)"
