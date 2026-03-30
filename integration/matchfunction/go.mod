@@ -1,13 +1,14 @@
 module agones-openmatch/matchfunction
 
-go 1.21
+go 1.23.0
+
 toolchain go1.24.1
 
 require (
 	github.com/pkg/errors v0.9.1
 	google.golang.org/grpc v1.57.1
 	google.golang.org/protobuf v1.33.0
-	open-match.dev/open-match v1.8.0
+	open-match.dev/open-match v1.8.1
 )
 
 require (

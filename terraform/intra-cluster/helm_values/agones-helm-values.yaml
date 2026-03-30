@@ -60,32 +60,20 @@ agones:
               operator: In
               values: ["true"]
           topologyKey: topology.kubernetes.io/zone
-        # preferredDuringSchedulingIgnoredDuringExecution:
-        #   - weight: 1
-        #     preference:
-        #       matchExpressions:
-        #         - key: "agones.dev/agones-system"
-        #           operator: Exists
     generateTLS: true
     tlsCert: ""
     tlsKey: ""
-    disableSecret: true
+    disableSecret: false
     allocationApiService:
-      annotations: {'cert-manager.io/inject-ca-from': 'agones-system/agones-cert'}
-      disableCaBundle: true
+      annotations: {}
+      disableCaBundle: false
     validatingWebhook:
-      annotations: {'cert-manager.io/inject-ca-from': 'agones-system/agones-cert'}
-      disableCaBundle: true
+      annotations: {}
+      disableCaBundle: false
     mutatingWebhook:
-      annotations: {'cert-manager.io/inject-ca-from': 'agones-system/agones-cert'}
-      disableCaBundle: true
-    customCertSecretPath:
-      - key: "ca.crt"
-        path: "ca.crt"
-      - key: "tls.crt"
-        path: "server.crt"
-      - key: "tls.key"
-        path: "server.key"
+      annotations: {}
+      disableCaBundle: false
+    customCertSecretPath: {}
     safeToEvict: false
     persistentLogs: true
     persistentLogsSizeLimitMB: 10000
@@ -115,23 +103,19 @@ agones:
     generateTLS: true
     tlsCert: ""
     tlsKey: ""
-    disableSecret: true
+    disableSecret: false
     allocationApiService:
-      annotations: { 'cert-manager.io/inject-ca-from': 'agones-system/agones-cert' }
-      disableCaBundle: true
+      annotations: {}
+      disableCaBundle: false
     validatingWebhook:
-      annotations: { 'cert-manager.io/inject-ca-from': 'agones-system/agones-cert' }
-      disableCaBundle: true
+      annotations: {}
+      disableCaBundle: false
     mutatingWebhook:
-      annotations: { 'cert-manager.io/inject-ca-from': 'agones-system/agones-cert' }
-      disableCaBundle: true
-    customCertSecretPath:
-      - key: "ca.crt"
-        path: "ca.crt"
-      - key: "tls.crt"
-        path: "server.crt"
-      - key: "tls.key"
-        path: "server.key"
+      annotations: {}
+      disableCaBundle: false
+    customCertSecretPath: {}
+    webhooks:
+      port: 8081
     persistentLogs: true
     persistentLogsSizeLimitMB: 10000
     logLevel: info
@@ -180,6 +164,7 @@ agones:
       response: ok
       port: 80
       serviceType: LoadBalancer
+      externalTrafficPolicy: Cluster
       loadBalancerIP: ""
       loadBalancerSourceRanges: []
       annotations: {}
@@ -188,6 +173,7 @@ agones:
       rateLimit: 20
       port: 50000
       serviceType: LoadBalancer
+      externalTrafficPolicy: Cluster
       loadBalancerIP: ""
       loadBalancerSourceRanges: []
       annotations: {}
@@ -228,6 +214,7 @@ agones:
     service:
       name: agones-allocator
       serviceType: LoadBalancer
+      externalTrafficPolicy: Cluster
       loadBalancerIP: ""
       loadBalancerSourceRanges: []
       # Disabled because makes LoadBalancer unresponsive, need to investigate further

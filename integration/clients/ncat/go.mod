@@ -1,6 +1,7 @@
 module agones-openmatch/ncat-player
 
-go 1.21
+go 1.23.0
+
 toolchain go1.24.1
 
 require agones-openmatch/allocation v0.0.0-00010101000000-000000000000
@@ -18,7 +19,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/grpc v1.57.1 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
-	open-match.dev/open-match v1.8.0 // indirect
+	open-match.dev/open-match v1.8.1 // indirect
 )
 
 replace agones-openmatch/allocation => ../allocation-client

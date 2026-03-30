@@ -122,7 +122,7 @@ resource "helm_release" "agones" {
   name             = "agones"
   chart            = "agones"
   repository       = "https://agones.dev/chart/stable"
-  version          = "1.36.0"
+  version          = "1.47.0"
   namespace        = "agones-system"
   create_namespace = false
   timeout          = 1800
@@ -196,7 +196,7 @@ resource "helm_release" "open-match" {
   name             = "open-match"
   chart            = "open-match"
   repository       = "https://open-match.dev/chart/stable"
-  version          = "1.8.0"
+  version          = "1.8.1"
   namespace        = "open-match"
   create_namespace = false
   timeout          = 1800
@@ -300,6 +300,34 @@ resource "null_resource" "open_match_ingress_configuration" {
   depends_on = [
     helm_release.open-match,
     null_resource.agones_tls_configuration
+  ]
+}
+
+################################################################################
+# Open Match TLS Hardening (GODEBUG=tls3des=0)
+# Open Match 1.8.1 is compiled with Go 1.21 which may still offer 3DES cipher
+# suites. The Helm chart does not support env var injection, so we patch the
+# deployments post-install to explicitly disable 3DES.
+################################################################################
+resource "null_resource" "open_match_tls_hardening" {
+  count = var.configure_open_match ? 1 : 0
+  triggers = {
+    always_run = "${timestamp()}"
+  }
+
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+      kubectl config use-context $(kubectl config get-contexts -o=name | grep ${var.cluster_name}) && \
+      kubectl set env deployment/open-match-frontend -n open-match GODEBUG=tls3des=0 && \
+      kubectl set env deployment/open-match-backend -n open-match GODEBUG=tls3des=0 && \
+      kubectl set env deployment/open-match-query -n open-match GODEBUG=tls3des=0
+    EOT
+  }
+
+  depends_on = [
+    helm_release.open-match,
+    null_resource.open_match_ingress_configuration
   ]
 }
 

@@ -9,8 +9,9 @@ echo "- Verify that the cert-manager pods are running -"
 kubectl get pods -n cert-manager -o wide
 echo "- Verify the cert-manager webhook is available -"
 kubectl wait deployment -l app=webhook --for condition=Available=True --timeout=90s -n cert-manager
-echo "- Create the cluster issuer and the certificate for Agones -"
+echo "- Create the cluster issuer for cert-manager (used by allocator TLS) -"
 kubectl apply -f ${ROOT_PATH}/manifests/cluster-issuer.yaml
-kubectl apply -f ${ROOT_PATH}/manifests/agones-controller-cert.yaml
+# Controller/extensions now use Agones built-in TLS (generateTLS: true, disableSecret: false).
+# Only the allocator still uses cert-manager (see configure-agones-tls.sh).
 
 sleep 60
