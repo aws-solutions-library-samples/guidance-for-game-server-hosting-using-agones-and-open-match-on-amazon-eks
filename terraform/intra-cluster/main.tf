@@ -237,6 +237,21 @@ resource "helm_release" "open-match" {
     value = "\\{\"openmatch\": \"system\"\\}"
   }
 
+  set {
+    name  = "redis.image.tag"
+    value = "latest"
+  }
+
+  set {
+    name  = "redis.metrics.image.tag"
+    value = "latest"
+  }
+
+  set {
+    name  = "redis.sysctl.image.tag"
+    value = "latest"
+  }
+
   depends_on = [
     module.eks_blueprints_addons,
     null_resource.generate_agones_certs,
