@@ -196,6 +196,7 @@ module "eks" {
   }
 
  authentication_mode = "API_AND_CONFIG_MAP"
+  enable_cluster_creator_admin_permissions = true
   access_entries = {
     # Only create blueprint_admin entry
     blueprint_admin = {
@@ -274,7 +275,7 @@ provider "kubernetes" {
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.cluster_region]
   }
 }
 data "aws_caller_identity" "current" {}

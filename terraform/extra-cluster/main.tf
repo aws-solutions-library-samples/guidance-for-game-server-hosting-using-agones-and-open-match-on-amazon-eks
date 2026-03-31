@@ -15,6 +15,9 @@ provider "aws" {
 
 data "aws_caller_identity" "current" {}
 
+locals {
+  repo_root = "${path.module}/../.."
+}
 
 ## ECR
 resource "aws_ecr_replication_configuration" "cross_ecr_replication" {
@@ -253,7 +256,7 @@ resource "null_resource" "aga_mapping_cluster_1" {
 
   provisioner "local-exec" {
     when    = create
-    command = "nohup ${path.cwd}/scripts/deploy-mapping-configmap.sh ${var.cluster_1_name} ${aws_globalaccelerator_custom_routing_accelerator.aga_gs_cluster_1.id} ${var.cluster_2_name} ${aws_globalaccelerator_custom_routing_accelerator.aga_gs_cluster_2.id}&"
+    command = "nohup ${local.repo_root}/scripts/deploy-mapping-configmap.sh ${var.cluster_1_name} ${aws_globalaccelerator_custom_routing_accelerator.aga_gs_cluster_1.id} ${var.cluster_2_name} ${aws_globalaccelerator_custom_routing_accelerator.aga_gs_cluster_2.id}&"
   }
 
   depends_on = [
@@ -272,7 +275,7 @@ resource "null_resource" "multicluster_allocation" {
 
   provisioner "local-exec" {
     when    = create
-    command = "nohup ${path.cwd}/scripts/configure-multicluster-allocation.sh ${var.cluster_1_name} ${var.cluster_2_name} ${path.cwd}&"
+    command = "nohup ${local.repo_root}/scripts/configure-multicluster-allocation.sh ${var.cluster_1_name} ${var.cluster_2_name} ${local.repo_root}&"
   }
 
 }

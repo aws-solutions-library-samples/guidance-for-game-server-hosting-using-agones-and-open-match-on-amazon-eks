@@ -31,7 +31,7 @@ phases:
       - go version
 
       - echo "Installing kubectl..."
-      - curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.28.0/2023-04-19/bin/linux/amd64/kubectl
+      - curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.32.0/2024-12-20/bin/linux/amd64/kubectl
       - chmod +x ./kubectl
       - mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$PATH:$HOME/bin
       - echo 'export PATH=$PATH:$HOME/bin' >> ~/.bashrc
@@ -51,6 +51,7 @@ phases:
   build:
     commands:
       - echo "Initializing Terraform for cluster creation..."
+      - echo 'terraform { backend "s3" {} }' > terraform/cluster/backend-ci.tf
       - |
         terraform -chdir=terraform/cluster init \
           -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
@@ -74,6 +75,7 @@ phases:
 
       - echo "Step 2 - Terraform Intra-Cluster"
       - echo "Initializing Terraform for intra-cluster configuration..."
+      - echo 'terraform { backend "s3" {} }' > terraform/intra-cluster/backend-ci.tf
       - |
         terraform -chdir=terraform/intra-cluster init \
           -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
@@ -134,6 +136,7 @@ phases:
         export FLB_ARN=$(aws elbv2 describe-load-balancers --region ${REGION1} | jq -r ".LoadBalancers[] | select(.DNSName==\"$FLB_NAME\") | .LoadBalancerArn")
       - echo "FLB_ARN=$FLB_ARN"
       - echo "Initializing Terraform for extra-cluster configuration"
+      - echo 'terraform { backend "s3" {} }' > terraform/extra-cluster/backend-ci.tf
       - |
         terraform -chdir=terraform/extra-cluster init \
           -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
@@ -191,7 +194,7 @@ phases:
       - echo "Integrating Open Match with Agones..."
       - |
         cd $CODEBUILD_SRC_DIR
-        kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1})
+        kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER1}$")
         sh scripts/deploy-matchfunction.sh ${CLUSTER1} ${REGION1}
         sh scripts/deploy-director.sh ${CLUSTER1} ${REGION1} ${REGION2}
         kubectl get pods -n agones-openmatch
