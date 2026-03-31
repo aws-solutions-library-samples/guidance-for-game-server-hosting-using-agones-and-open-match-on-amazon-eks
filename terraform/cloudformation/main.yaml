@@ -92,7 +92,7 @@ Parameters:
     Description: "CIDR block for the second EKS cluster VPC"
   KubernetesVersion:
     Type: String
-    Default: "1.28"
+    Default: "1.32"
     Description: "Kubernetes version for the EKS clusters"
   RepositoryOwner:
     Type: String
