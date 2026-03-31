@@ -51,6 +51,7 @@ phases:
   build:
     commands:
       - echo "Initializing Terraform for cluster creation..."
+      - echo 'terraform { backend "s3" {} }' > terraform/cluster/backend-ci.tf
       - |
         terraform -chdir=terraform/cluster init \
           -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
@@ -74,6 +75,7 @@ phases:
 
       - echo "Step 2 - Terraform Intra-Cluster"
       - echo "Initializing Terraform for intra-cluster configuration..."
+      - echo 'terraform { backend "s3" {} }' > terraform/intra-cluster/backend-ci.tf
       - |
         terraform -chdir=terraform/intra-cluster init \
           -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \
@@ -134,6 +136,7 @@ phases:
         export FLB_ARN=$(aws elbv2 describe-load-balancers --region ${REGION1} | jq -r ".LoadBalancers[] | select(.DNSName==\"$FLB_NAME\") | .LoadBalancerArn")
       - echo "FLB_ARN=$FLB_ARN"
       - echo "Initializing Terraform for extra-cluster configuration"
+      - echo 'terraform { backend "s3" {} }' > terraform/extra-cluster/backend-ci.tf
       - |
         terraform -chdir=terraform/extra-cluster init \
           -backend-config="bucket=${TERRAFORM_STATE_BUCKET}" \

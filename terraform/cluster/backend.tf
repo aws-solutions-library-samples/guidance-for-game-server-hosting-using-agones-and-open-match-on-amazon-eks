@@ -1,7 +1,4 @@
 terraform {
-  backend "s3" {
-    # This block is intentionally empty.
-    # Backend configuration will be provided via -backend-config parameters
-    # when initializing Terraform in the automated pipeline.
-  }
+  # Backend configuration is injected by the CI/CD pipeline (see buildspec.yml).
+  # Manual deployments use the default local backend.
 }
