@@ -2,7 +2,7 @@
 ## SPDX-License-Identifier: MIT-0
 
 
-FROM public.ecr.aws/docker/library/golang:1.21.4-alpine3.18 AS builder
+FROM public.ecr.aws/docker/library/golang:1.24-alpine AS builder
 RUN apk add --no-cache git
 WORKDIR /app
 
