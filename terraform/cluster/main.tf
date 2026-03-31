@@ -4,6 +4,7 @@ module "cluster1" {
   source                                      = "./modules/cluster"
   cluster_name                                = var.cluster_1_name
   cluster_region                              = var.cluster_1_region
+  cluster_version                             = var.cluster_version
   cluster_cidr                                = var.cluster_1_cidr
   open_match                                  = true
   all_mngs_use_arm_based_instance_types       = var.all_arm_based_instances_cluster_1
@@ -17,6 +18,7 @@ module "cluster2" {
   source                                      = "./modules/cluster"
   cluster_name                                = var.cluster_2_name
   cluster_region                              = var.cluster_2_region
+  cluster_version                             = var.cluster_version
   cluster_cidr                                = var.cluster_2_cidr
   open_match                                  = false
   all_mngs_use_arm_based_instance_types       = var.all_arm_based_instances_cluster_2

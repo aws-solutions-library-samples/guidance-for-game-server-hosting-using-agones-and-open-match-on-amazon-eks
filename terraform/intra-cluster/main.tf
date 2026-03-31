@@ -6,6 +6,7 @@ provider "aws" {
 }
 
 locals {
+  repo_root          = "${path.module}/../.."
   name               = var.cluster_name
   cluster_region     = var.cluster_region
   gameserver_minport = 7000
@@ -51,8 +52,8 @@ resource "kubernetes_namespace" "this" {
   provisioner "local-exec" {
 
     when    = destroy
-    command = "nohup ${path.cwd}/scripts/namespace-finalizer.sh ${each.key} 2>&1 &"
-    # command = "nohup ${path.cwd}/scripts/namespace-finalizer.sh ${var.cluster_name} ${each.key} 2>&1 &"
+    command = "nohup ${path.module}/../../scripts/namespace-finalizer.sh ${each.key} 2>&1 &"
+    # command = "nohup ${path.module}/../../scripts/namespace-finalizer.sh ${var.cluster_name} ${each.key} 2>&1 &"
   }
 }
 
@@ -237,6 +238,21 @@ resource "helm_release" "open-match" {
     value = "\\{\"openmatch\": \"system\"\\}"
   }
 
+  set {
+    name  = "redis.image.tag"
+    value = "latest"
+  }
+
+  set {
+    name  = "redis.metrics.image.tag"
+    value = "latest"
+  }
+
+  set {
+    name  = "redis.sysctl.image.tag"
+    value = "latest"
+  }
+
   depends_on = [
     module.eks_blueprints_addons,
     null_resource.generate_agones_certs,
@@ -257,7 +273,7 @@ resource "null_resource" "agones_tls_configuration" {
 
   provisioner "local-exec" {
     when    = create
-    command = "nohup ${path.cwd}/scripts/configure-agones-tls.sh ${local.name} ${path.cwd}&"
+    command = "nohup ${local.repo_root}/scripts/configure-agones-tls.sh ${local.name} ${local.repo_root}&"
   }
 
   depends_on = [
@@ -275,7 +291,7 @@ resource "null_resource" "allocator_tls_files" {
 
   provisioner "local-exec" {
     when    = create
-    command = "nohup ${path.cwd}/scripts/generate-tls-files.sh ${var.cluster_name} ${path.cwd} &"
+    command = "nohup ${local.repo_root}/scripts/generate-tls-files.sh ${var.cluster_name} ${local.repo_root} &"
   }
 
   depends_on = [
@@ -294,7 +310,7 @@ resource "null_resource" "open_match_ingress_configuration" {
 
   provisioner "local-exec" {
     when    = create
-    command = "nohup ${path.cwd}/scripts/configure-open-match-ingress.sh ${var.cluster_name} ${path.cwd} &"
+    command = "nohup ${local.repo_root}/scripts/configure-open-match-ingress.sh ${var.cluster_name} ${local.repo_root} &"
   }
 
   depends_on = [
@@ -311,7 +327,7 @@ resource "null_resource" "generate_agones_certs" {
 
   provisioner "local-exec" {
     when    = create
-    command = "nohup ${path.cwd}/scripts/generate-agones-certs.sh ${var.cluster_name} ${path.cwd} &"
+    command = "nohup ${local.repo_root}/scripts/generate-agones-certs.sh ${var.cluster_name} ${local.repo_root} &"
   }
 
   depends_on = [

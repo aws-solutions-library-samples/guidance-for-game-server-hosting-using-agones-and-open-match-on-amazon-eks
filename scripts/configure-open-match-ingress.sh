@@ -4,7 +4,7 @@ set -o xtrace
 echo "#####"
 CLUSTER_NAME=$1
 ROOT_PATH=$2
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
+kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$")
 kubectl get pods -n open-match -o wide
 # Create Load Balancer
 kubectl expose deployment open-match-frontend  -n open-match  --type=LoadBalancer  --name="${CLUSTER_NAME}-om-fe"
