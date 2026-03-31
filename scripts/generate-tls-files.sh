@@ -3,7 +3,7 @@
 set -o xtrace
 export CLUSTER_NAME=$1
 export ROOT_PATH=$2
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
+kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$")
 KEY_FILE=${ROOT_PATH}/client_${CLUSTER_NAME}.key
 CERT_FILE=${ROOT_PATH}/client_${CLUSTER_NAME}.crt
 TLS_CA_FILE=${ROOT_PATH}/ca_${CLUSTER_NAME}.crt

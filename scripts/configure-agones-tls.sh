@@ -4,7 +4,7 @@ set -o xtrace
 echo "#####"
 CLUSTER_NAME=$1
 ROOT_PATH=$2
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
+kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$")
 echo "- Verify that the Agones pods are running -"
 kubectl get pods -n agones-system -o wide
 export EXTERNAL_IP=$(kubectl get services agones-allocator -n agones-system -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
