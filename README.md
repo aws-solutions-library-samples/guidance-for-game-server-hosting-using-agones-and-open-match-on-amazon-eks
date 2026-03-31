@@ -103,7 +103,7 @@ CIDR1="10.1.0.0/16"
 CLUSTER2=agones-gameservers-2
 REGION2=us-east-2
 CIDR2="10.2.0.0/16"
-VERSION="1.28"
+VERSION="1.32"
 ```
 
 For simplicity, we will be using local Terraform state files. In production workloads, we recommend storing the state files remotely, for example using the [S3 Terraform backend](https://developer.hashicorp.com/terraform/language/settings/backends/s3).
