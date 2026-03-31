@@ -36,7 +36,7 @@ docker push $REGISTRY/supertuxkart-server
 echo "supertuxkart build and push was successful"
 
 echo "- Deploy fleets to cluster ${CLUSTER_NAME1} -"
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME1})
+kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME1}$")
 export REGION=$REGION1
 for f in manifests/fleets/${GAMESERVER_TYPE}/*
 do
@@ -50,7 +50,7 @@ echo
 
 
 echo "- Deploy fleets to cluster ${CLUSTER_NAME2} -"
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME2})
+kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME2}$")
 export REGION=$REGION2
 for f in manifests/fleets/${GAMESERVER_TYPE}/*
 do
