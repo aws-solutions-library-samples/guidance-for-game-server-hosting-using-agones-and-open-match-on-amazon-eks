@@ -1,7 +1,7 @@
 ## Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 ## SPDX-License-Identifier: MIT-0
 export CLUSTER_NAME=$1
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
+kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$")
 KEY_FILE=client_${CLUSTER_NAME}.key
 CERT_FILE=client_${CLUSTER_NAME}.crt
 TLS_CA_FILE=ca_${CLUSTER_NAME}.crt

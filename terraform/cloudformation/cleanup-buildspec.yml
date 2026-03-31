@@ -245,8 +245,8 @@ phases:
       # Remove the clusters from kubectl config
       - |
         echo "Removing clusters from kubectl config..."
-        kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER1}) 2>/dev/null || echo "No kubectl context found for cluster 1"
-        kubectl config delete-context $(kubectl config get-contexts -o=name | grep ${CLUSTER2}) 2>/dev/null || echo "No kubectl context found for cluster 2"
+        kubectl config delete-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER1}$") 2>/dev/null || echo "No kubectl context found for cluster 1"
+        kubectl config delete-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER2}$") 2>/dev/null || echo "No kubectl context found for cluster 2"
 
   post_build:
     commands:
