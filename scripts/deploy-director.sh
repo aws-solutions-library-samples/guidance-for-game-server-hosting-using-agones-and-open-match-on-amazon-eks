@@ -8,7 +8,7 @@ export REGION2=$3
 export ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 export REGISTRY=${ACCOUNT_ID}.dkr.ecr.${REGION1}.amazonaws.com
 
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME})
+kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$")
 echo "- Create configmap -"
 # Create the configmap that will store the certs/keys used by the Open Match Director to access the 
 # Agones Allocator Service (we use the files `client_*` and `ca_*` 

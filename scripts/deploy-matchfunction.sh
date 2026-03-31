@@ -13,7 +13,7 @@ docker buildx build  --platform=linux/amd64 -t $REGISTRY/agones-openmatch-mmf in
 echo "- Push image to register -"
 docker push $REGISTRY/agones-openmatch-mmf
 
-kubectl config use-context $(kubectl config get-contexts -o=name | grep ${CLUSTER_NAME1})
+kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME1}$")
 echo "- Deploy Open Match mmf to cluster ${CLUSTER_NAME1} -"
 envsubst < integration/matchfunction/matchfunction.yaml | kubectl apply --namespace ${NAMESPACE} -f -
 echo
