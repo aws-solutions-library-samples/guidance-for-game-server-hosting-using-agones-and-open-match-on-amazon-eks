@@ -50,10 +50,8 @@ resource "kubernetes_namespace" "this" {
     name = each.key
   }
   provisioner "local-exec" {
-
     when    = destroy
-    command = "nohup ${path.module}/../../scripts/namespace-finalizer.sh ${each.key} 2>&1 &"
-    # command = "nohup ${path.module}/../../scripts/namespace-finalizer.sh ${var.cluster_name} ${each.key} 2>&1 &"
+    command = "${path.module}/../../scripts/namespace-finalizer.sh ${each.key}"
   }
 }
 
