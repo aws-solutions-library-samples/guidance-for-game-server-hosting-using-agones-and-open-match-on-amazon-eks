@@ -82,5 +82,6 @@ variable "cluster_2_gameservers_subnets" {
 }
 
 variable "aws_lb_arn" {
-  type = string
+  type    = string
+  default = ""
 }
