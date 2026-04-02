@@ -20,7 +20,7 @@ agones:
   registerApiService: true
   crds:
     install: true
-    cleanupOnDelete: true
+    cleanupOnDelete: false
   serviceaccount:
     allocator:
       name: agones-allocator
