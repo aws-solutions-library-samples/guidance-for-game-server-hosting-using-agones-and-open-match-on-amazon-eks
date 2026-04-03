@@ -332,7 +332,7 @@ resource "null_resource" "open_match_tls_hardening" {
   provisioner "local-exec" {
     when    = create
     command = <<-EOT
-      kubectl config use-context $(kubectl config get-contexts -o=name | grep ${var.cluster_name}) && \
+      kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${var.cluster_name}$") && \
       kubectl set env deployment/open-match-frontend -n open-match GODEBUG=tls3des=0 && \
       kubectl set env deployment/open-match-backend -n open-match GODEBUG=tls3des=0 && \
       kubectl set env deployment/open-match-query -n open-match GODEBUG=tls3des=0
