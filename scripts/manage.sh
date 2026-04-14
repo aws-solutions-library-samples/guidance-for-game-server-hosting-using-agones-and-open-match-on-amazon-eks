@@ -43,12 +43,14 @@ tfvar() {
 }
 
 # Read a terraform output from a given stage directory.
+# Uses -json + jq to correctly handle sensitive outputs (which -raw renders as
+# the literal string "(sensitive value)" instead of the real value).
 # Fails loudly if the output is empty (prevents silent bad -var values).
 tf_out() {
   local dir="$1" key="$2"
   local val
-  val=$(terraform -chdir="$dir" output -raw "$key")
-  if [[ -z "$val" ]]; then
+  val=$(terraform -chdir="$dir" output -json "$key" | jq -r '.')
+  if [[ -z "$val" ]] || [[ "$val" == "null" ]]; then
     err "Terraform output '${key}' from ${dir} is empty or missing"
   fi
   echo "$val"
@@ -58,7 +60,7 @@ tf_out_json() {
   local dir="$1" key="$2"
   local val
   val=$(terraform -chdir="$dir" output -json "$key")
-  if [[ -z "$val" ]]; then
+  if [[ -z "$val" ]] || [[ "$val" == "null" ]]; then
     err "Terraform output '${key}' from ${dir} is empty or missing"
   fi
   echo "$val"
@@ -175,7 +177,7 @@ deploy_extra_cluster() {
 
   local flb_arn
   flb_arn=$(aws elbv2 describe-load-balancers --region "${REGION1}" \
-    | jq -r --arg DNS "$flb_name" '.LoadBalancers[] | select(.DNSName==$DNS) | .LoadBalancerArn')
+    | jq -r --arg DNS "$flb_name" '[.LoadBalancers[] | select(.DNSName==$DNS) | .LoadBalancerArn] | first // empty')
 
   if [[ -z "$flb_arn" ]]; then
     err "Could not find load balancer ARN for Open Match Frontend (${om_svc_name})"
@@ -306,7 +308,10 @@ destroy_intra_cluster() {
   terraform -chdir="$INTRA_DIR" init -input=false
 
   # Destroy cluster 2 workspace first (no Open Match dependency)
-  if terraform -chdir="$INTRA_DIR" workspace select "${REGION2}" 2>/dev/null; then
+  local existing_workspaces
+  existing_workspaces=$(terraform -chdir="$INTRA_DIR" workspace list)
+  if echo "$existing_workspaces" | grep -qF "${REGION2}"; then
+    terraform -chdir="$INTRA_DIR" workspace select "${REGION2}"
     local rc2
     rc2=$(terraform -chdir="$INTRA_DIR" state list | wc -l | tr -d ' ')
     if [[ "$rc2" -eq 0 ]]; then
@@ -336,7 +341,8 @@ destroy_intra_cluster() {
   fi
 
   # Destroy cluster 1 workspace
-  if terraform -chdir="$INTRA_DIR" workspace select "${REGION1}" 2>/dev/null; then
+  if echo "$existing_workspaces" | grep -qF "${REGION1}"; then
+    terraform -chdir="$INTRA_DIR" workspace select "${REGION1}"
     local rc1
     rc1=$(terraform -chdir="$INTRA_DIR" state list | wc -l | tr -d ' ')
     if [[ "$rc1" -eq 0 ]]; then
@@ -379,10 +385,8 @@ cleanup_load_balancers() {
     local region="${!region_var}"
     local vpc_num="${region_var: -1}"
     local vpc_id
-    vpc_id=$(tf_out "$CLUSTER_DIR" "vpc_${vpc_num}_id" 2>/dev/null) || continue
-
-    if [[ -z "$vpc_id" ]]; then
-      log "    Skipping ${region}: could not determine VPC ID"
+    if ! vpc_id=$(tf_out "$CLUSTER_DIR" "vpc_${vpc_num}_id"); then
+      log "    WARNING: Skipping ${region}: could not determine VPC ID -- orphaned LBs may block VPC deletion"
       continue
     fi
 
@@ -390,24 +394,28 @@ cleanup_load_balancers() {
     local elbs
     elbs=$(aws elb describe-load-balancers --region "$region" \
       --query "LoadBalancerDescriptions[?VPCId==\`${vpc_id}\`].LoadBalancerName" \
-      --output text 2>/dev/null) || true
+      --output json 2>/dev/null | jq -r '.[]') || true
     for elb in $elbs; do
       log "    Deleting Classic ELB: ${elb} (${region})"
-      aws elb delete-load-balancer --region "$region" --load-balancer-name "$elb" \
-        || log "    WARNING: Failed to delete Classic ELB ${elb} -- VPC destroy may fail"
-      any_deleted=true
+      if aws elb delete-load-balancer --region "$region" --load-balancer-name "$elb"; then
+        any_deleted=true
+      else
+        log "    WARNING: Failed to delete Classic ELB ${elb} -- VPC destroy may fail"
+      fi
     done
 
     # elbv2 NLBs/ALBs (Open Match Frontend, Agones allocator/ping)
     local nlbs
     nlbs=$(aws elbv2 describe-load-balancers --region "$region" \
       --query "LoadBalancers[?VpcId==\`${vpc_id}\`].LoadBalancerArn" \
-      --output text 2>/dev/null) || true
+      --output json 2>/dev/null | jq -r '.[]') || true
     for nlb in $nlbs; do
       log "    Deleting NLB/ALB: ${nlb} (${region})"
-      aws elbv2 delete-load-balancer --region "$region" --load-balancer-arn "$nlb" \
-        || log "    WARNING: Failed to delete NLB/ALB ${nlb} -- VPC destroy may fail"
-      any_deleted=true
+      if aws elbv2 delete-load-balancer --region "$region" --load-balancer-arn "$nlb"; then
+        any_deleted=true
+      else
+        log "    WARNING: Failed to delete NLB/ALB ${nlb} -- VPC destroy may fail"
+      fi
     done
   done
 
@@ -422,16 +430,15 @@ cleanup_load_balancers() {
     local region="${!region_var}"
     local vpc_num="${region_var: -1}"
     local vpc_id
-    vpc_id=$(tf_out "$CLUSTER_DIR" "vpc_${vpc_num}_id" 2>/dev/null) || continue
-
-    if [[ -z "$vpc_id" ]]; then
+    if ! vpc_id=$(tf_out "$CLUSTER_DIR" "vpc_${vpc_num}_id"); then
+      log "    WARNING: Skipping ${region} SG cleanup: could not determine VPC ID"
       continue
     fi
 
     local sgs
     sgs=$(aws ec2 describe-security-groups --region "$region" \
       --filters "Name=vpc-id,Values=${vpc_id}" "Name=group-name,Values=k8s-*" \
-      --query 'SecurityGroups[].GroupId' --output text 2>/dev/null) || true
+      --query 'SecurityGroups[].GroupId' --output json 2>/dev/null | jq -r '.[]') || true
     for sg in $sgs; do
       log "    Deleting orphaned k8s security group: ${sg} (${region})"
       aws ec2 delete-security-group --region "$region" --group-id "$sg" \
