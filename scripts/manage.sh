@@ -47,7 +47,7 @@ tfvar() {
 tf_out() {
   local dir="$1" key="$2"
   local val
-  val=$(terraform -chdir="$dir" output -raw "$key" 2>/dev/null)
+  val=$(terraform -chdir="$dir" output -raw "$key")
   if [[ -z "$val" ]]; then
     err "Terraform output '${key}' from ${dir} is empty or missing"
   fi
@@ -57,7 +57,7 @@ tf_out() {
 tf_out_json() {
   local dir="$1" key="$2"
   local val
-  val=$(terraform -chdir="$dir" output -json "$key" 2>/dev/null)
+  val=$(terraform -chdir="$dir" output -json "$key")
   if [[ -z "$val" ]]; then
     err "Terraform output '${key}' from ${dir} is empty or missing"
   fi
@@ -247,7 +247,7 @@ destroy_extra_cluster() {
 
   # If state is empty, nothing to destroy
   local resource_count
-  resource_count=$(terraform -chdir="$EXTRA_DIR" state list 2>/dev/null | wc -l | tr -d ' ')
+  resource_count=$(terraform -chdir="$EXTRA_DIR" state list | wc -l | tr -d ' ')
   if [[ "$resource_count" -eq 0 ]]; then
     log "  Extra-cluster state is empty, skipping"
     return 0
@@ -308,7 +308,7 @@ destroy_intra_cluster() {
   # Destroy cluster 2 workspace first (no Open Match dependency)
   if terraform -chdir="$INTRA_DIR" workspace select "${REGION2}" 2>/dev/null; then
     local rc2
-    rc2=$(terraform -chdir="$INTRA_DIR" state list 2>/dev/null | wc -l | tr -d ' ')
+    rc2=$(terraform -chdir="$INTRA_DIR" state list | wc -l | tr -d ' ')
     if [[ "$rc2" -eq 0 ]]; then
       log "  Workspace ${REGION2} state is empty, skipping"
     else
@@ -338,7 +338,7 @@ destroy_intra_cluster() {
   # Destroy cluster 1 workspace
   if terraform -chdir="$INTRA_DIR" workspace select "${REGION1}" 2>/dev/null; then
     local rc1
-    rc1=$(terraform -chdir="$INTRA_DIR" state list 2>/dev/null | wc -l | tr -d ' ')
+    rc1=$(terraform -chdir="$INTRA_DIR" state list | wc -l | tr -d ' ')
     if [[ "$rc1" -eq 0 ]]; then
       log "  Workspace ${REGION1} state is empty, skipping"
     else
@@ -386,25 +386,27 @@ cleanup_load_balancers() {
       continue
     fi
 
-    # Classic ELBs (Open Match Frontend uses this type)
+    # Classic ELBs (legacy; included for completeness)
     local elbs
     elbs=$(aws elb describe-load-balancers --region "$region" \
       --query "LoadBalancerDescriptions[?VPCId==\`${vpc_id}\`].LoadBalancerName" \
       --output text 2>/dev/null) || true
     for elb in $elbs; do
       log "    Deleting Classic ELB: ${elb} (${region})"
-      aws elb delete-load-balancer --region "$region" --load-balancer-name "$elb" || true
+      aws elb delete-load-balancer --region "$region" --load-balancer-name "$elb" \
+        || log "    WARNING: Failed to delete Classic ELB ${elb} -- VPC destroy may fail"
       any_deleted=true
     done
 
-    # elbv2 NLBs/ALBs (Agones allocator, ping)
+    # elbv2 NLBs/ALBs (Open Match Frontend, Agones allocator/ping)
     local nlbs
     nlbs=$(aws elbv2 describe-load-balancers --region "$region" \
       --query "LoadBalancers[?VpcId==\`${vpc_id}\`].LoadBalancerArn" \
       --output text 2>/dev/null) || true
     for nlb in $nlbs; do
       log "    Deleting NLB/ALB: ${nlb} (${region})"
-      aws elbv2 delete-load-balancer --region "$region" --load-balancer-arn "$nlb" || true
+      aws elbv2 delete-load-balancer --region "$region" --load-balancer-arn "$nlb" \
+        || log "    WARNING: Failed to delete NLB/ALB ${nlb} -- VPC destroy may fail"
       any_deleted=true
     done
   done
@@ -432,7 +434,8 @@ cleanup_load_balancers() {
       --query 'SecurityGroups[].GroupId' --output text 2>/dev/null) || true
     for sg in $sgs; do
       log "    Deleting orphaned k8s security group: ${sg} (${region})"
-      aws ec2 delete-security-group --region "$region" --group-id "$sg" || true
+      aws ec2 delete-security-group --region "$region" --group-id "$sg" \
+        || log "    WARNING: Failed to delete security group ${sg} -- VPC destroy may fail"
     done
   done
 }
