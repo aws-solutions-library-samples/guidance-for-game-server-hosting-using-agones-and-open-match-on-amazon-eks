@@ -3,7 +3,13 @@
 set -o xtrace
 export CLUSTER_NAME=$1
 export ROOT_PATH=$2
-kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$" | head -1)
+CONTEXT=$(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$" | head -1)
+if [ -z "$CONTEXT" ]; then
+  echo "ERROR: No kubectl context found matching cluster '${CLUSTER_NAME}'." >&2
+  kubectl config get-contexts -o=name >&2
+  exit 1
+fi
+kubectl config use-context "$CONTEXT"
 KEY_FILE=${ROOT_PATH}/client_${CLUSTER_NAME}.key
 CERT_FILE=${ROOT_PATH}/client_${CLUSTER_NAME}.crt
 TLS_CA_FILE=${ROOT_PATH}/ca_${CLUSTER_NAME}.crt

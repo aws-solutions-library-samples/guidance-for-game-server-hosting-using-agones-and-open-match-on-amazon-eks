@@ -332,7 +332,12 @@ resource "null_resource" "open_match_tls_hardening" {
   provisioner "local-exec" {
     when    = create
     command = <<-EOT
-      kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${var.cluster_name}$" | head -1) && \
+      CONTEXT=$(kubectl config get-contexts -o=name | grep "/${var.cluster_name}$" | head -1)
+      if [ -z "$CONTEXT" ]; then
+        echo "ERROR: No kubectl context found for cluster '${var.cluster_name}'. Run: aws eks update-kubeconfig --name ${var.cluster_name}" >&2
+        exit 1
+      fi
+      kubectl config use-context "$CONTEXT" && \
       kubectl set env deployment/open-match-frontend -n open-match GODEBUG=tls3des=0 && \
       kubectl set env deployment/open-match-backend -n open-match GODEBUG=tls3des=0 && \
       kubectl set env deployment/open-match-query -n open-match GODEBUG=tls3des=0
