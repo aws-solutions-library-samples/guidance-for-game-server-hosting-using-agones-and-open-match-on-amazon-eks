@@ -21,6 +21,7 @@ curl -L -o integration/clients/stk-server-build/main.go https://raw.githubuserco
 
 echo "- Creating tailored supertuxkart image (amd64 or arm64) -"
 aws ecr get-login-password --region ${REGION1} | docker login --username AWS --password-stdin $REGISTRY
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 
 if [[ $ARCHITECTURE == "arm64" ]];
 then 

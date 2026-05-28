@@ -12,6 +12,7 @@ export ARCHITECTURE=$5
 
 
 aws ecr get-login-password --region ${REGION1} | docker login --username AWS --password-stdin $REGISTRY
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 #docker buildx build --platform=linux/amd64  -t $REGISTRY/agones-openmatch-ncat-server integration/ncat-server
 #docker buildx build --platform=linux/arm64  -t $REGISTRY/agones-openmatch-ncat-server integration/ncat-server
 echo "Architecture is" $ARCHITECTURE
