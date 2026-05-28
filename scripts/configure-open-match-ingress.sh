@@ -36,7 +36,7 @@ kubectl get secret open-match-tls-server -o json -n open-match | jq '.data["priv
 kubectl delete pods -n open-match --all
 
 # Copy the open-match-tls-certmanager from open-match to agones-openmatch namespace
-kubectl get secret open-match-tls-certmanager -o json -n open-match | jq '.metadata.namespace="agones-openmatch"' | kubectl apply -f -
+kubectl get secret open-match-tls-certmanager -o json -n open-match | jq '.metadata.namespace="agones-openmatch" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' | kubectl apply -f -
 
 # Import the certificate into ACM for NLB TLS termination
 TMPDIR=$(mktemp -d)
