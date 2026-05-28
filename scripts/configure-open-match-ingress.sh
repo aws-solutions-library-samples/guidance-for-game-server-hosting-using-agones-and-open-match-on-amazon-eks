@@ -39,16 +39,17 @@ kubectl delete pods -n open-match --all
 kubectl get secret open-match-tls-certmanager -o json -n open-match | jq '.metadata.namespace="agones-openmatch" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp)' | kubectl apply -f -
 
 # Import the certificate into ACM for NLB TLS termination
-TMPDIR=$(mktemp -d)
-trap "rm -rf ${TMPDIR}" EXIT
-echo "${TLS_CERT_VALUE}" | base64 -d > "${TMPDIR}/tls.crt"
-echo "${TLS_KEY_VALUE}" | base64 -d > "${TMPDIR}/tls.key"
-echo "${TLS_CA_VALUE}" | base64 -d > "${TMPDIR}/ca.crt"
+CERT_TMPDIR=$(mktemp -d)
+chmod 700 "${CERT_TMPDIR}"
+trap "rm -rf ${CERT_TMPDIR}" EXIT
+echo "${TLS_CERT_VALUE}" | base64 -d > "${CERT_TMPDIR}/tls.crt"
+echo "${TLS_KEY_VALUE}" | base64 -d > "${CERT_TMPDIR}/tls.key"
+echo "${TLS_CA_VALUE}" | base64 -d > "${CERT_TMPDIR}/ca.crt"
 
 ACM_ARN=$(aws acm import-certificate \
-  --certificate "fileb://${TMPDIR}/tls.crt" \
-  --private-key "fileb://${TMPDIR}/tls.key" \
-  --certificate-chain "fileb://${TMPDIR}/ca.crt" \
+  --certificate "fileb://${CERT_TMPDIR}/tls.crt" \
+  --private-key "fileb://${CERT_TMPDIR}/tls.key" \
+  --certificate-chain "fileb://${CERT_TMPDIR}/ca.crt" \
   --region "${REGION}" \
   --tags Key=Name,Value="${CLUSTER_NAME}-open-match-frontend" \
   --output text --query CertificateArn)
