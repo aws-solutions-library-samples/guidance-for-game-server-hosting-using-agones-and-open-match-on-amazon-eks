@@ -56,15 +56,28 @@ ACM_ARN=$(aws acm import-certificate \
 
 echo "Imported certificate to ACM: ${ACM_ARN}"
 
-# Create Load Balancer with TLS termination
-kubectl expose deployment open-match-frontend -n open-match --type=LoadBalancer --name="${CLUSTER_NAME}-om-fe" --port=50504 --target-port=50504 --dry-run=client -o yaml | kubectl apply -f -
-
-# Annotate the service for NLB with TLS termination (AWS Load Balancer Controller)
-kubectl annotate svc ${CLUSTER_NAME}-om-fe -n open-match --overwrite=true \
-  service.beta.kubernetes.io/aws-load-balancer-type=external \
-  service.beta.kubernetes.io/aws-load-balancer-nlb-target-type=ip \
-  service.beta.kubernetes.io/aws-load-balancer-scheme=internet-facing \
-  service.beta.kubernetes.io/aws-load-balancer-ssl-cert="${ACM_ARN}" \
-  service.beta.kubernetes.io/aws-load-balancer-ssl-ports="50504" \
-  service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy=ELBSecurityPolicy-TLS13-1-2-Res-2021-06 \
-  service.beta.kubernetes.io/aws-load-balancer-backend-protocol=ssl
+# Create Load Balancer with TLS termination (annotations inline to prevent in-tree controller race)
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${CLUSTER_NAME}-om-fe
+  namespace: open-match
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "${ACM_ARN}"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "50504"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: ELBSecurityPolicy-TLS13-1-2-Res-2021-06
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: ssl
+spec:
+  type: LoadBalancer
+  selector:
+    app: open-match
+    component: frontend
+  ports:
+    - port: 50504
+      targetPort: 50504
+      protocol: TCP
+EOF
