@@ -4,6 +4,16 @@
 tempfile.json
 .DS_Store
 .idea
+.vscode/
+.claude/
+.kiro/
 .terraform*
 terraform.tfstate*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
 go.work*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
