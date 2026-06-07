@@ -1,0 +1,13 @@
+# Agones + Open Match on EKS - Configuration
+# Copy this file to agones.tfvars and fill in your values.
+# Used by scripts/manage.sh to drive all three Terraform stages.
+
+cluster_1_name   = "agones-gameservers-1"
+cluster_1_region = "us-east-1"
+cluster_1_cidr   = "10.1.0.0/16"
+
+cluster_2_name   = "agones-gameservers-2"
+cluster_2_region = "us-east-2"
+cluster_2_cidr   = "10.2.0.0/16"
+
+cluster_version  = "1.32"
