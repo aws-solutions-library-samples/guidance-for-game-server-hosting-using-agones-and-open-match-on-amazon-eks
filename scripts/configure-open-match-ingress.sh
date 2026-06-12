@@ -4,7 +4,13 @@ set -o xtrace
 echo "#####"
 CLUSTER_NAME=$1
 ROOT_PATH=$2
-kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$")
+CONTEXT=$(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$" | head -1)
+if [ -z "$CONTEXT" ]; then
+  echo "ERROR: No kubectl context found matching cluster '${CLUSTER_NAME}'." >&2
+  kubectl config get-contexts -o=name >&2
+  exit 1
+fi
+kubectl config use-context "$CONTEXT"
 kubectl get pods -n open-match -o wide
 # Create Load Balancer
 kubectl expose deployment open-match-frontend  -n open-match  --type=LoadBalancer  --name="${CLUSTER_NAME}-om-fe"  --port=50504  --target-port=50504

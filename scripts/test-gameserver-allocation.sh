@@ -5,7 +5,7 @@ echo "#####"
 NAMESPACE=gameservers
 CLUSTER_NAME=$1
 REGION=$2
-kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$")
+kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$" | head -1)
 KEY_FILE=client_${CLUSTER_NAME}.key
 CERT_FILE=client_${CLUSTER_NAME}.crt
 TLS_CA_FILE=ca_${CLUSTER_NAME}.crt
