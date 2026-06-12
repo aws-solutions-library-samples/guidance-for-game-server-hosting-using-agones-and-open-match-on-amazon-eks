@@ -4,7 +4,13 @@ set -o xtrace
 echo "#####"
 CLUSTER_NAME=$1
 ROOT_PATH=$2
-kubectl config use-context $(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$")
+CONTEXT=$(kubectl config get-contexts -o=name | grep "/${CLUSTER_NAME}$" | head -1)
+if [ -z "$CONTEXT" ]; then
+  echo "ERROR: No kubectl context found matching cluster '${CLUSTER_NAME}'." >&2
+  kubectl config get-contexts -o=name >&2
+  exit 1
+fi
+kubectl config use-context "$CONTEXT"
 echo "- Verify that the cert-manager pods are running -"
 kubectl get pods -n cert-manager -o wide
 echo "- Verify the cert-manager webhook is available -"
