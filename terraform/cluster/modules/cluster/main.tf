@@ -243,6 +243,10 @@ module "vpc" {
   default_security_group_tags   = { Name = "${var.cluster_name}-default" }
 
 
+  public_subnet_tags = {
+    "kubernetes.io/role/elb" = 1
+  }
+
   private_subnet_tags = {
     "kubernetes.io/role/internal-elb" = 1
   }
