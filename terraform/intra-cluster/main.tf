@@ -308,7 +308,7 @@ resource "null_resource" "open_match_ingress_configuration" {
 
   provisioner "local-exec" {
     when    = create
-    command = "nohup ${local.repo_root}/scripts/configure-open-match-ingress.sh ${var.cluster_name} ${local.repo_root} &"
+    command = "${local.repo_root}/scripts/configure-open-match-ingress.sh ${var.cluster_name} ${local.repo_root} ${var.cluster_region}"
   }
 
   depends_on = [
