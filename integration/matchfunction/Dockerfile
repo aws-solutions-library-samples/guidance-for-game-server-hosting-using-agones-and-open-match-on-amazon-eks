@@ -7,7 +7,7 @@ RUN apk add --no-cache git
 WORKDIR /app
 
 # Set Go Proxy env variables
-ENV GOPROXY=https://goproxy.io,direct
+ENV GOPROXY=https://proxy.golang.org,direct
 # Leverage caching by copying go.mod and go.sum first
 COPY go.mod go.sum ./
 RUN go mod download
