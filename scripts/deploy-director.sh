@@ -21,6 +21,7 @@ kubectl create configmap allocator-tls -n agones-openmatch \
 
 echo "- Login to ECR registry -"
 aws ecr get-login-password --region ${REGION1} | docker login --username AWS --password-stdin $REGISTRY
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 echo "- Build director image -"
 docker buildx build  --platform=linux/amd64 -t $REGISTRY/agones-openmatch-director integration/director
 echo "- Push image to register -"
